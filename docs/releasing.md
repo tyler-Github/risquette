@@ -23,23 +23,29 @@ GitHub release ──► Risquette-Backend ──► app: "0.2.0 is available"
 
 ## Cutting a release
 
+Only the repository owner can publish releases. The "Protect release tags" ruleset stops anyone else creating, moving or deleting `v*` tags, the release job refuses to run for anyone but the owner, and it runs in the `release` environment, which only accepts `v*` tags.
+
 1. Bump `version` in the root `Cargo.toml`.
 2. Tag and push:
    ```sh
    git tag v0.2.0 && git push origin v0.2.0
    ```
-   A tag with a suffix, such as `v0.3.0-beta.1`, becomes a pre-release and is offered only on the beta channel.
+   A tag with a suffix, such as `v0.3.0-beta.1`, becomes a pre-release and is offered only on the beta channel. That makes a beta the safe way to try a release: switch one install to the beta channel in Settings → Updates and check that it updates before you publish the stable version.
 3. `.github/workflows/release.yml` runs the tests, builds the installer and attaches two files to the release:
    - `RisquetteSetup-<version>-windows-x86_64.exe`
    - `RisquetteSetup-<version>-windows-x86_64.exe.sha256`. The app won't install an update without this file.
 
-### Repository settings
+Release notes come from GitHub's automatic notes (the pull requests merged since the last release). Edit the release text on GitHub if you want to say more; the app's update dialog shows it as the "What's new" section.
+
+### Settings
 
 | Kind | Name | Purpose |
 | --- | --- | --- |
-| Variable (optional) | `RISQUETTE_UPDATE_URL` | A different update server to bake into the app. Without it, builds use the official server, `https://risquette.xnoid.studio`. |
-| Secret (optional) | `SIGNTOOL_CERT_BASE64` | A code-signing `.pfx`, base64-encoded. |
-| Secret (optional) | `SIGNTOOL_PASSWORD` | Its password. |
+| Repository variable (optional) | `RISQUETTE_UPDATE_URL` | A different update server to bake into the app. Without it, builds use the official server, `https://risquette.xnoid.studio`. |
+| `release` environment secret (optional) | `SIGNTOOL_CERT_BASE64` | A code-signing `.pfx`, base64-encoded. |
+| `release` environment secret (optional) | `SIGNTOOL_PASSWORD` | Its password. |
+
+Put the signing secrets in the `release` environment (Settings → Environments → release) rather than at repository level, so only release runs can read them.
 
 ## Building an installer locally
 
@@ -62,16 +68,17 @@ This writes the installer and its checksum to `dist/`.
 | `risquette-setup.exe` | The install wizard. |
 | `risquette-setup.exe --silent [--dir PATH]` | An unattended install. |
 | `risquette-setup.exe --update --wait-pid N --launch` | Used by the app's updater: waits for the app to exit, replaces it, then reopens it. |
-| `uninstall.exe --uninstall [--silent]` | Uninstall. Apps & features runs this too. |
+| `uninstall.exe [--silent]` | Uninstall. Opening `uninstall.exe` in the install folder shows the uninstaller; Apps & features runs `uninstall.exe --uninstall`. |
 
 Installs are per-user and need no administrator rights:
 
 - Files go to `%LOCALAPPDATA%\Programs\Risquette`.
 - The uninstall entry goes under `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\Risquette`.
+- Uninstalling removes the app, its shortcuts and the uninstall entry. If the user ticks "Also remove my settings and saved logins", it also deletes `%APPDATA%\Risquette` (settings and logins) and `%LOCALAPPDATA%\Risquette` (logs and crash reports).
 
 ## The update server
 
-The official server runs at `https://risquette.xnoid.studio`. Risquette-Backend is a separate project; to run your own, deploy it anywhere that runs a container or a Rust binary, and point it at this repository:
+The official server runs at `https://risquette.xnoid.studio` on Fly.io, behind Cloudflare. It also serves the project website at `/`. Its code is in the separate **Risquette-Backend** project, whose README covers deploying to Fly. To run your own, deploy it anywhere that runs a container or a Rust binary, and point it at this repository:
 
 | Variable | Purpose |
 | --- | --- |

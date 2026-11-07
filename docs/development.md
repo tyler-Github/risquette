@@ -12,10 +12,13 @@
 | `crates/risquette` | The desktop app. |
 | `crates/risquette-installer` | The installer, updater and uninstaller (`risquette-setup.exe`). |
 | `branding/` | Logo, banners, social preview and screenshots. |
-| `scripts/` | Packaging and image generation. |
+| `scripts/` | Packaging (`package.ps1`), image generation (`make_icon.py`, `make_branding.py`) and the docs link check (`check_docs.py`). |
 | `docs/` | These documents. |
+| `.github/` | CI and release workflows, issue and pull request templates, CODEOWNERS and Dependabot. |
 
-The update server is a separate project, **Risquette-Backend**: a small axum service that answers update checks from this repository's GitHub releases. See [releasing.md](releasing.md).
+The update server is a separate project, **Risquette-Backend**: a small axum service that answers update checks from this repository's GitHub releases and serves the website at `https://risquette.xnoid.studio`. See [releasing.md](releasing.md).
+
+For how to propose changes and how pull requests get reviewed, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Running
 
@@ -35,6 +38,16 @@ cargo run -p risquette-installer           # the installer (see below)
 | `RUST_LOG` | Logging. For example, `risquette=debug,discuit_api=debug` logs every request (image signatures are redacted). |
 
 Settings and saved logins live in `state.json` in `%APPDATA%\Risquette` (Windows), `~/.config/risquette` (Linux) or `~/Library/Application Support/Risquette` (macOS).
+
+### Logs and crash reports
+
+`crates/risquette/src/crash.rs` handles both. Everything logged also goes to `%LOCALAPPDATA%\Risquette\logs
+isquette.log`, which is rotated at 2 MB with one old copy kept. If the app panics on any thread:
+
+1. A report goes to `%LOCALAPPDATA%\Risquette\crashes\crash-<time>.txt`, and only the newest 10 are kept. It contains the version, the Windows version, the panic message and its location, the last 100 log lines and a backtrace.
+2. The app starts a second copy of itself as `risquette --crash-report <file>` and exits, because a crashed app can't safely draw UI. That copy shows the crash window, which can open a pre-filled GitHub issue, restart the app, copy the details or show the file.
+
+With `RISQUETTE_CONFIG_DIR` set, logs and crash reports go there too. To try the flow, set `RISQUETTE_TEST_CRASH=1` and the app panics on purpose three seconds after starting. Release builds strip debug symbols, so backtraces show addresses only; the panic message and file location are always exact.
 
 <p align="center">
   <img alt="The installer's options page" src="../branding/framed/installer-options.png" width="47%">
@@ -99,7 +112,7 @@ These features change data on the server, so they're tested by hand.
 python scripts/make_branding.py   # needs Pillow
 ```
 
-The script also refreshes `assets/risquette.ico`, which gets built into both executables. `branding/framed/` holds the same screenshots with rounded corners and a shadow, which the docs use. The screenshots in `branding/screenshots/` are window captures of the app, logged out, using a clean `RISQUETTE_CONFIG_DIR`.
+The script also refreshes `assets/risquette.ico`, which gets built into both executables. `branding/framed/` holds the same screenshots with rounded corners and a shadow, which the docs use. To screenshot the crash window without crashing, run `risquette --crash-report <file>` with a saved report. The screenshots in `branding/screenshots/` are window captures of the app, logged out, using a clean `RISQUETTE_CONFIG_DIR`.
 
 ## Notes
 

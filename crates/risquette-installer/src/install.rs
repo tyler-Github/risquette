@@ -247,6 +247,10 @@ pub fn uninstall(dir: &Path, remove_data: bool, progress: Progress) -> Result<()
             let _ = std::fs::remove_dir_all(cfg.join("Risquette"));
         }
         let _ = std::fs::remove_dir_all(std::env::temp_dir().join("Risquette"));
+        // Logs and crash reports.
+        if let Some(local) = dirs::data_local_dir() {
+            let _ = std::fs::remove_dir_all(local.join("Risquette"));
+        }
     }
     progress(0.95, "Cleaning up…");
     remove_dir_later(dir);

@@ -303,7 +303,7 @@ impl SettingsView {
             .child(setting(
                 "Connect to another instance",
                 "Risquette works with any Discuit server. Logins are kept separately for each instance.",
-                div().flex().gap(px(8.)).child(div().flex_1().min_w_0().child(self.instance.clone())).child(
+                div().flex().gap(px(8.)).child(div().flex_1().min_w_0().flex().flex_col().child(self.instance.clone())).child(
                     ui::disabled(ui::button_main("s-connect", if self.probing { "Checking…" } else { "Connect" }, cx), self.probing).on_click(cx.listener(
                         |this, _, _, cx| {
                             let text = this.instance.read(cx).text().to_string();
@@ -419,7 +419,7 @@ impl SettingsView {
                 div()
                     .flex()
                     .gap(px(8.))
-                    .child(div().flex_1().min_w_0().child(self.update_server.clone()))
+                    .child(div().flex_1().min_w_0().flex().flex_col().child(self.update_server.clone()))
                     .child(ui::button("s-upd-save", "Save", cx).on_click(cx.listener(|this, _, _, cx| this.save_update_server(cx)))),
                 cx,
             ))
@@ -497,6 +497,38 @@ fn setting(title: &'static str, hint: impl Into<SharedString>, control: impl Int
                 .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(hint.into())),
         )
         .child(control)
+}
+
+/// Help & troubleshooting: where to report problems, and the logs and crash reports to attach.
+fn help_section(cx: &gpui::App) -> gpui::Div {
+    let t = cx.theme();
+    let crashes = crate::crash::crashes_dir();
+    let crash_count = std::fs::read_dir(&crashes).map(|d| d.flatten().filter(|e| e.file_name().to_string_lossy().starts_with("crash-")).count()).unwrap_or(0);
+    let logs = crate::crash::logs_dir();
+    section("Help & troubleshooting", cx)
+        .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(
+            "Found a bug or something that doesn't look right? Report it on GitHub. Attaching the log file helps us find the cause. It never includes your password or login.",
+        ))
+        .child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(8.))
+                .child(
+                    ui::button_main_with_icon("s-report", Icon::Flag, "Report a problem", cx)
+                        .on_click(|_, _, cx| cx.open_url("https://github.com/tyler-Github/risquette/issues/new/choose")),
+                )
+                .child(ui::button_with_icon("s-logs", Icon::FileText, "Open logs folder", cx).on_click(move |_, _, cx| {
+                    let _ = std::fs::create_dir_all(&logs);
+                    cx.open_with_system(&logs);
+                }))
+                .when(crash_count > 0, |d| {
+                    d.child(
+                        ui::button_with_icon("s-crashes", Icon::FileText, format!("Crash reports ({crash_count})"), cx)
+                            .on_click(move |_, _, cx| cx.open_with_system(&crashes)),
+                    )
+                }),
+        )
 }
 
 fn section(title: &'static str, cx: &gpui::App) -> gpui::Div {
@@ -643,12 +675,24 @@ impl Render for SettingsView {
         );
 
         let (instance_card, app_card, updates_card) = self.app_sections(window, cx);
+        let help_card = help_section(cx);
         let logged_in = Session::get(cx).user().is_some();
         let two_cols = f32::from(window.viewport_size().width) > 1250.;
         let (left, right) = if logged_in {
             (
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(profile).child(prefs).child(password),
-                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(instance_card).child(updates_card).child(mutes).child(danger),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(app_card)
+                    .child(instance_card)
+                    .child(updates_card)
+                    .child(help_card)
+                    .child(mutes)
+                    .child(danger),
             )
         } else {
             let signin = section("Account", cx)
@@ -663,7 +707,7 @@ impl Render for SettingsView {
                         .child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))),
                 );
             (
-                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(signin),
+                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(signin).child(help_card),
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(instance_card).child(updates_card),
             )
         };

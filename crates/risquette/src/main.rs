@@ -8,6 +8,7 @@ mod admin;
 mod bus;
 mod communities;
 mod community;
+mod crash;
 mod embed;
 mod feed;
 mod icons;
@@ -53,14 +54,23 @@ fn startup_target(arg: &str, client: &Client) -> Option<nav::Target> {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("risquette=info,discuit_api=info")).init();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    crash::init_logging();
+    crash::install_panic_hook();
+
+    // `risquette --crash-report <file>`: started by the panic hook to show the crash window.
+    if let [flag, path, ..] = args.as_slice()
+        && flag == "--crash-report"
+    {
+        crash::run_reporter(path.into());
+        return;
+    }
 
     // Instance: env override, then the one chosen in Settings, then discuit.org.
     let base_url = std::env::var("RISQUETTE_BASE_URL").ok().or_else(|| storage::load().instance).unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
     let client = Client::new(&base_url).expect("valid base url");
     log::info!("connecting to {base_url}");
     // `risquette <discuit link or path>` opens that page, e.g. `risquette https://discuit.org/@alice`.
-    let args: Vec<String> = std::env::args().skip(1).collect();
     // `risquette --play <video link>` opens the pop-out player for that link.
     let play = match args.as_slice() {
         [flag, link, ..] if flag == "--play" => match embed::detect(link) {
@@ -86,6 +96,7 @@ fn main() {
         bus::init(cx);
         session::Session::init(cx);
         updater::Updater::init(cx);
+        crash::schedule_test_crash(cx);
 
         input::bind_keys(cx);
         cx.bind_keys([

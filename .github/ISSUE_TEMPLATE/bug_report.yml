@@ -98,7 +98,8 @@ body:
     attributes:
       label: Logs
       description: |
-        For crashes, run Risquette from a terminal with `RUST_LOG=risquette=debug` set and paste the output (or the panic message).
+        If Risquette crashed, the crash window's "Report the problem" button fills this in for you.
+        Otherwise, open Settings → Help & troubleshooting → **Open logs folder** and paste the end of `risquette.log`, or drag the file here.
         **Never paste `state.json` or anything containing `SID` or `csrftoken`.** Those are your login cookies.
       render: text
     validations:
