@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = ["crates/discuit-api", "crates/risquette-theme", "crates/risquette", "crates/risquette-installer"]
+default-members = ["crates/risquette"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/tyler-Github/risquette"
+
+[workspace.dependencies]
+gpui = "=0.2.2"
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+ureq = { version = "3.5", default-features = false, features = ["rustls", "gzip", "json"] }
+url = "2"
+log = "0.4"
+env_logger = "0.11"
+smol = "2"
+discuit-api = { path = "crates/discuit-api" }
+risquette-theme = { path = "crates/risquette-theme" }
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = true

@@ -1,0 +1,63 @@
+name: Feature request
+description: Suggest an idea or an improvement for Risquette.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! Please check the [feature list](https://github.com/tyler-Github/risquette/blob/main/docs/features.md) and [existing requests](https://github.com/tyler-Github/risquette/issues?q=is%3Aissue+label%3Aenhancement) first.
+
+        Features that need changes to Discuit's server belong in the [Discuit repository](https://github.com/discuitnet/discuit/issues).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe what you're trying to do and what gets in the way.
+      placeholder: I follow a lot of communities and it's hard to find the one I want in the sidebar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: Describe the feature. Sketches and mock-ups are welcome.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Feeds and posts
+        - Comments
+        - Communities
+        - Profiles and lists
+        - Notifications
+        - Posting
+        - Moderation and admin
+        - Settings
+        - Installer and updates
+        - Look and feel
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Other ways to solve it, or how you work around it today.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd be willing to open a pull request for this.
+          required: false

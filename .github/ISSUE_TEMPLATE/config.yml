@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Problem with Discuit itself
+    url: https://github.com/discuitnet/discuit/issues
+    about: Bugs and features in the Discuit server or website (things that also happen on discuit.org).
+  - name: Talk about Discuit
+    url: https://discuit.org/DiscuitMeta
+    about: General discussion about Discuit and its community.
+  - name: Documentation
+    url: https://github.com/tyler-Github/risquette/tree/main/docs
+    about: Features, development setup, releasing and the update server.

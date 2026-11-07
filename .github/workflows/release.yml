@@ -1,0 +1,76 @@
+# Builds the Windows installer and publishes it to a GitHub release when a
+# version tag is pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
+#
+# The update server (Risquette-Backend) reads these releases:
+#   RisquetteSetup-<version>-windows-x86_64.exe         the installer
+#   RisquetteSetup-<version>-windows-x86_64.exe.sha256  its checksum (required by the app)
+# Tags with a pre-release suffix (v0.3.0-beta.1) become pre-releases and are
+# offered only on the beta channel.
+#
+# Repository settings:
+#   Variables (optional): RISQUETTE_UPDATE_URL  a different update server to bake into the app
+#                         (default: the official https://risquette.xnoid.studio)
+#   Secrets (optional, for code signing): SIGNTOOL_CERT_BASE64, SIGNTOOL_PASSWORD
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      SIGNTOOL_CERT_BASE64: ${{ secrets.SIGNTOOL_CERT_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check the tag matches the crate version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = ((cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq "risquette").version
+          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match Cargo version $version" }
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Prepare signing certificate
+        if: env.SIGNTOOL_CERT_BASE64 != ''
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:SIGNTOOL_CERT_BASE64))
+          "SIGNTOOL_CERT=$path" >> $env:GITHUB_ENV
+
+      - name: Package
+        shell: pwsh
+        env:
+          RISQUETTE_UPDATE_URL: ${{ vars.RISQUETTE_UPDATE_URL }}
+          SIGNTOOL_PASSWORD: ${{ secrets.SIGNTOOL_PASSWORD }}
+        run: ./scripts/package.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer
+          path: dist/*
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Risquette ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: |
+            dist/RisquetteSetup-*.exe
+            dist/RisquetteSetup-*.exe.sha256

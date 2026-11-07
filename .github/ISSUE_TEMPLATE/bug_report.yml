@@ -1,0 +1,115 @@
+name: Bug report
+description: Something in Risquette doesn't work the way it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please [search existing issues](https://github.com/tyler-Github/risquette/issues?q=is%3Aissue) first; someone may have reported it already.
+
+        If the problem is with Discuit itself (it happens on the website too), report it to [Discuit](https://github.com/discuitnet/discuit/issues) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+      placeholder: When I open a post with several images, the carousel arrows don't respond.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can we make it happen ourselves? A link to the post or community helps.
+      placeholder: |
+        1. Open https://discuit.org/...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Risquette version
+      description: Shown in Settings → Updates.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Risquette?
+      options:
+        - Installer from GitHub releases
+        - Built from source
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+
+  - type: input
+    id: instance
+    attributes:
+      label: Discuit instance
+      description: Settings → Instance.
+      placeholder: discuit.org
+    validations:
+      required: false
+
+  - type: dropdown
+    id: logged-in
+    attributes:
+      label: Were you logged in?
+      options:
+        - "Yes"
+        - "No"
+        - Doesn't matter / not sure
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recordings
+      description: Drag images or videos here. Crop out anything personal.
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        For crashes, run Risquette from a terminal with `RUST_LOG=risquette=debug` set and paste the output (or the panic message).
+        **Never paste `state.json` or anything containing `SID` or `csrftoken`.** Those are your login cookies.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this hasn't been reported.
+          required: true
+        - label: I removed passwords, cookies and other personal details from what I pasted.
+          required: true
