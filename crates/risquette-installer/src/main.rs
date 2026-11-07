@@ -33,8 +33,33 @@ struct Args {
     preview: Option<String>,
 }
 
-fn parse_args(args: &[String]) -> Args {
-    let mut out = Args { mode: Mode::Install, silent: false, dir: None, preview: None };
+/// Whether this executable is the copy installed as `uninstall.exe`.
+/// Opened directly (double-click) it gets no `--uninstall` flag, so the name decides.
+fn invoked_as_uninstaller() -> bool {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()))
+        .is_some_and(|name| name == install::UNINSTALL_EXE)
+}
+
+/// Where to install to or uninstall from: `--dir`, else (for the uninstaller) its own
+/// folder, else the registered install location, else the default.
+fn target_dir(args: &Args) -> PathBuf {
+    if let Some(dir) = &args.dir {
+        return dir.clone();
+    }
+    if args.mode == Mode::Uninstall {
+        let own = std::env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from));
+        if let Some(own) = own.filter(|d| d.join(install::APP_EXE).exists()) {
+            return own;
+        }
+    }
+    install::installed_dir().unwrap_or_else(install::default_dir)
+}
+
+fn parse_args(args: &[String], as_uninstaller: bool) -> Args {
+    let start = if as_uninstaller { Mode::Uninstall } else { Mode::Install };
+    let mut out = Args { mode: start, silent: false, dir: None, preview: None };
     let (mut pid, mut launch, mut update) = (None, false, false);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -71,6 +96,26 @@ enum Msg {
     Finished(Result<(), String>),
 }
 
+/// What running the wizard will do, given what's installed already.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InstallKind {
+    Fresh,
+    /// The same version is installed: repair it.
+    Reinstall,
+    /// A different (normally older) version is installed.
+    Update,
+}
+
+impl InstallKind {
+    fn from_existing(existing: Option<&str>) -> Self {
+        match existing {
+            None => Self::Fresh,
+            Some(v) if v == install::VERSION => Self::Reinstall,
+            Some(_) => Self::Update,
+        }
+    }
+}
+
 struct Setup {
     mode: Mode,
     page: Page,
@@ -87,8 +132,12 @@ struct Setup {
 static LOGO: &[u8] = include_bytes!("../../../assets/risquette.png");
 
 impl Setup {
+    fn kind(&self) -> InstallKind {
+        InstallKind::from_existing(self.existing.as_deref())
+    }
+
     fn new(args: &Args, cx: &mut Context<Self>) -> Self {
-        let dir = args.dir.clone().or_else(install::installed_dir).unwrap_or_else(install::default_dir);
+        let dir = target_dir(args);
         let mut this = Self {
             mode: args.mode.clone(),
             page: match args.mode {
@@ -422,7 +471,12 @@ impl Setup {
                         cx.notify();
                     })),
                 );
-                (if self.existing.is_some() { "Update Risquette".into() } else { "Welcome to Risquette".into() }, body.into_any_element(), footer)
+                let title = match self.kind() {
+                    InstallKind::Fresh => "Welcome to Risquette",
+                    InstallKind::Reinstall => "Reinstall Risquette",
+                    InstallKind::Update => "Update Risquette",
+                };
+                (title.into(), body.into_any_element(), footer)
             }
             Page::Options => {
                 let o = &self.opts;
@@ -487,15 +541,25 @@ impl Setup {
                         cx.notify();
                     })))
                     .child(
-                        button("install", if self.existing.is_some() { "Update" } else { "Install" }, true, cx)
-                            .on_click(cx.listener(|this, _, _, cx| this.start_install(None, cx))),
+                        button(
+                            "install",
+                            match self.kind() {
+                                InstallKind::Fresh => "Install",
+                                InstallKind::Reinstall => "Reinstall",
+                                InstallKind::Update => "Update",
+                            },
+                            true,
+                            cx,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| this.start_install(None, cx))),
                     );
                 ("Choose how to install".into(), body.into_any_element(), footer)
             }
             Page::Working => {
                 let title = match self.mode {
                     Mode::Uninstall => "Removing Risquette".to_string(),
-                    _ if self.existing.is_some() => "Updating Risquette".to_string(),
+                    _ if self.kind() == InstallKind::Update => "Updating Risquette".to_string(),
+                    _ if self.kind() == InstallKind::Reinstall => "Reinstalling Risquette".to_string(),
                     _ => "Installing Risquette".to_string(),
                 };
                 let body = div().flex().flex_col().gap(px(10.)).child(progress_bar(self.progress, cx)).child(
@@ -666,16 +730,16 @@ impl Render for Setup {
 
 fn run_silent(args: &Args) -> i32 {
     let report = |f: f32, m: &str| log::info!("{:>3.0}% {m}", f * 100.);
+    let dir = target_dir(args);
     let result = match args.mode {
-        Mode::Uninstall => install::uninstall(&args.dir.clone().or_else(install::installed_dir).unwrap_or_else(install::default_dir), false, &report),
+        Mode::Uninstall => install::uninstall(&dir, false, &report),
         Mode::Update { pid, launch } => {
             if let Some(pid) = pid {
                 install::wait_for_pid(pid);
             }
-            let dir = args.dir.clone().or_else(install::installed_dir).unwrap_or_else(install::default_dir);
             install::install(&Options::new(dir.clone()), &report).and_then(|_| if launch { install::launch(&dir) } else { Ok(()) })
         }
-        Mode::Install => install::install(&Options::new(args.dir.clone().or_else(install::installed_dir).unwrap_or_else(install::default_dir)), &report),
+        Mode::Install => install::install(&Options::new(dir), &report),
     };
     match result {
         Ok(()) => 0,
@@ -689,7 +753,7 @@ fn run_silent(args: &Args) -> i32 {
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let raw: Vec<String> = std::env::args().skip(1).collect();
-    let args = parse_args(&raw);
+    let args = parse_args(&raw, invoked_as_uninstaller());
     if args.silent {
         std::process::exit(run_silent(&args));
     }
@@ -733,8 +797,30 @@ fn main() {
 mod tests {
     use super::*;
 
+    fn split(s: &str) -> Vec<String> {
+        s.split_whitespace().map(String::from).collect()
+    }
+
     fn args(s: &str) -> Args {
-        parse_args(&s.split_whitespace().map(String::from).collect::<Vec<_>>())
+        parse_args(&split(s), false)
+    }
+
+    #[test]
+    fn uninstall_exe_opens_the_uninstaller() {
+        // Double-clicking uninstall.exe passes no arguments.
+        assert_eq!(parse_args(&[], true).mode, Mode::Uninstall);
+        assert_eq!(parse_args(&split("--silent"), true).mode, Mode::Uninstall);
+        // It can't be talked into installing or updating.
+        assert_eq!(parse_args(&split("--update --wait-pid 1"), true).mode, Mode::Uninstall);
+        // The setup program still installs by default.
+        assert_eq!(parse_args(&[], false).mode, Mode::Install);
+    }
+
+    #[test]
+    fn install_kind_from_versions() {
+        assert_eq!(InstallKind::from_existing(None), InstallKind::Fresh);
+        assert_eq!(InstallKind::from_existing(Some(install::VERSION)), InstallKind::Reinstall);
+        assert_eq!(InstallKind::from_existing(Some("0.0.1")), InstallKind::Update);
     }
 
     #[test]
