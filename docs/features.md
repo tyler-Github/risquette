@@ -1,0 +1,74 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../branding/headers/features-dark.png">
+  <img alt="Risquette: Features" src="../branding/headers/features-light.png">
+</picture>
+
+Everything Risquette can do today. For a quick overview, see the [README](../README.md).
+
+## Reading
+
+- **Feeds:** Home (your joined communities) and All, sorted by Hot, New, Activity or Top, with infinite scroll.
+- **Posts:** text, image and link posts. Image posts with several pictures open as a carousel with captions. YouTube, Vimeo, Streamable, Dailymotion and direct video links play in a pop-out player, or in your browser if you prefer.
+- **Comments:** threaded and collapsible, with thread guides, inline replies and "show more replies".
+- **Communities:** banner, about, rules and moderators. Browse and search all communities.
+- **Profiles:** about text, badges, stats, moderated communities, and the user's posts and comments.
+- **Saved lists:** your own lists and other people's public lists.
+- **Links:** Discuit links open inside the app, and `risquette <link>` opens one from the command line.
+
+<table>
+  <tr>
+    <td width="50%"><img alt="A post with its comment thread" src="../branding/framed/post.png"></td>
+    <td width="50%"><img alt="A community page with banner, rules and moderators" src="../branding/framed/community.png"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Threaded comments with voting and replies</sub></td>
+    <td align="center"><sub>Community pages with rules and moderators</sub></td>
+  </tr>
+</table>
+
+## Taking part
+
+- **Accounts:** log in, sign up and log out. Your session is remembered between launches.
+- **Voting, commenting and posting:** with a markdown toolbar and preview, drag-and-drop image uploads, community suggestions, and a "fetch title" button for links.
+- **Post and comment menus:** save to a list, copy the link, hide, report, mute, edit and delete.
+- **Notifications:** a bell in the toolbar with an unread counter. You can mark notifications read or unread and delete them, one at a time or all at once.
+- **Communities:** join, leave or mute them, and create or request new ones.
+
+<p align="center">
+  <img alt="Exploring communities" src="../branding/framed/explore.png" width="760"><br>
+  <sub>Browse, search and join communities</sub>
+</p>
+
+## Moderating
+
+- **Mod tools (per community):** settings, icon and banner, rules, moderators, bans, the report queue, and removed or locked posts. Posts and comments can also be locked, pinned or removed from their menus.
+- **Admin:** site settings, site-wide bans and badges, default communities, community requests, IP blocks, the user and comment listings, and analytics.
+
+## The app
+
+- **Any Discuit instance:** switch servers in Settings → Instance. Risquette checks the address before switching and keeps a separate login for each instance.
+- **Settings:** profile picture, about text, preferences, password, muted users and communities, and account deletion. App settings work while logged out too: theme (System, Light or Dark), the feed to open on launch, and how videos open.
+- **Updates:** Risquette checks for new versions in the background, then shows a pill in the toolbar and an update dialog with release notes. Updates download with a progress bar and are checked against their SHA-256 before the app restarts into the new version. There are stable and beta channels, and you can skip a version.
+- **Installer:** a branded, per-user setup wizard that needs no administrator rights. It creates Start menu and desktop shortcuts, adds an entry in Apps & features, and installs a matching uninstaller.
+- **Interface:** a collapsible sidebar that shrinks to an icon rail, light and dark themes based on Discuit's own design, and [Lucide](https://lucide.dev) icons.
+
+<table>
+  <tr>
+    <td width="58%"><img alt="Settings: theme, instance and updates" src="../branding/framed/settings.png"></td>
+    <td width="42%"><img alt="The update dialog with release notes" src="../branding/framed/update-dialog.png"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>App settings, including the instance and updates</sub></td>
+    <td align="center"><sub>Updates come with release notes</sub></td>
+  </tr>
+</table>
+
+## Keyboard
+
+| Keys | Action |
+| --- | --- |
+| `Esc` / `Alt+Left` | Back, or close a dialog |
+| `F5` / `Ctrl+R` | Refresh |
+| `Ctrl+Shift+L` | Toggle light and dark theme |
+| `Ctrl+Enter` | Send a comment |
+| `Ctrl+Q` | Quit |

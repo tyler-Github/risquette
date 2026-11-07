@@ -1,0 +1,33 @@
+[package]
+name = "risquette"
+description = "A desktop client for Discuit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[dependencies]
+gpui.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+log.workspace = true
+env_logger.workspace = true
+smol.workspace = true
+ureq.workspace = true
+unicode-segmentation = "1.12"
+dirs = "7"
+pulldown-cmark = { version = "0.13", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+url.workspace = true
+wry = "=0.57.1"
+sha2 = "0.10"
+discuit-api.workspace = true
+risquette-theme.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Same version gpui uses; for the native video player window.
+windows = { version = "=0.61.3", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi", "Win32_UI_HiDpi"] }
+
+[target.'cfg(windows)'.build-dependencies]
+embed-resource = "3"
