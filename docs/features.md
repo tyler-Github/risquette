@@ -29,9 +29,11 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 ## Taking part
 
 - **Accounts:** log in, sign up and log out. Your session is remembered between launches.
+- **Multiple accounts:** stay logged in to several accounts and switch between them from the account menu or Settings → Accounts. Logging out of one switches to the next.
 - **Voting, commenting and posting:** with a markdown toolbar and preview, drag-and-drop image uploads, community suggestions, and a "fetch title" button for links.
 - **Post and comment menus:** save to a list, copy the link, hide, report, mute, edit and delete.
 - **Notifications:** a bell in the toolbar with an unread counter. You can mark notifications read or unread and delete them, one at a time or all at once.
+- **Desktop notifications:** new notifications also appear as Windows notifications while Risquette isn't the window you're using. Clicking one opens it in the app. They're off by default; turn them on in Settings → App. While they're on, a tray icon brings the window back with a click, and its right-click menu can quit Risquette.
 - **Communities:** join, leave or mute them, and create or request new ones.
 
 <p align="center">
@@ -49,6 +51,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 - **Any Discuit instance:** switch servers in Settings → Instance. Risquette checks the address before switching and keeps a separate login for each instance.
 - **Settings:** profile picture, about text, preferences, password, muted users and communities, and account deletion. App settings work while logged out too: theme (System, Light or Dark), the feed to open on launch, and how videos open.
 - **Updates:** Risquette checks for new versions in the background, then shows a pill in the toolbar and an update dialog with release notes. Updates download with a progress bar and are checked against their SHA-256 before the app restarts into the new version. There are stable and beta channels, and you can skip a version.
+- **One window:** Risquette opens maximized, and opening it while it's already running brings the existing window to the front.
 - **Crash reports:** if something goes wrong, Risquette saves a report and shows a friendly window explaining what happened. It can open a GitHub issue with the details already filled in, or restart the app. Settings → Help & troubleshooting opens the log and crash-report folders.
 - **Installer:** a branded, per-user setup wizard that needs no administrator rights. It creates Start menu and desktop shortcuts, adds an entry in Apps & features, and installs a matching uninstaller.
 - **Interface:** a collapsible sidebar that shrinks to an icon rail, light and dark themes based on Discuit's own design, and [Lucide](https://lucide.dev) icons.

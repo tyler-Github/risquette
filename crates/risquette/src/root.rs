@@ -65,6 +65,7 @@ impl Root {
         let mut last_user = None::<String>;
         let mut first = true;
         subs.push(cx.subscribe(&Session::entity(cx), move |this, session, _: &SessionEvent, cx| {
+            crate::desktop::sync_tray(cx);
             let s = session.read(cx);
             let user = s.user().map(|u| u.id.clone());
             if first && s.loaded || user != last_user {
@@ -127,7 +128,8 @@ impl Root {
                         Session::entity(cx).update(cx, |s, cx| {
                             s.set_notification_count(page.new_count, cx);
                             s.set_unread_notifications(unread, cx);
-                        })
+                        });
+                        crate::desktop::on_notifications(page.items.as_deref().unwrap_or_default(), cx);
                     })
                     .ok();
                 }
@@ -335,7 +337,22 @@ impl Root {
         if !mods_something {
             items.retain(|i| i.label.as_ref() != "Moderating feed");
         }
-        items.push(MenuItem::new("Log out", |_, cx| Session::entity(cx).update(cx, |s, cx| s.logout(cx))).icon(Icon::LogOut).danger());
+        // Other saved accounts on this instance, then adding one.
+        let others: Vec<_> = session.saved_accounts(cx).into_iter().filter(|a| !a.username.eq_ignore_ascii_case(&username)).collect();
+        for (ix, account) in others.into_iter().enumerate() {
+            let name = account.username.clone();
+            let item = MenuItem::new(format!("Switch to @{name}"), move |_, cx| {
+                let name = name.clone();
+                Session::entity(cx).update(cx, |s, cx| s.switch_account(&name, cx));
+            })
+            .icon(Icon::User);
+            items.push(if ix == 0 { item.separated() } else { item });
+        }
+        let add = MenuItem::new("Add another account", |_, cx| crate::modals::open_add_account(cx)).icon(Icon::Plus);
+        items.push(if items.iter().any(|i| i.separated) { add } else { add.separated() });
+        items.push(
+            MenuItem::new(format!("Log out @{username}"), |_, cx| Session::entity(cx).update(cx, |s, cx| s.logout(cx))).icon(Icon::LogOut).danger().separated(),
+        );
         items
     }
 
@@ -489,8 +506,10 @@ impl Root {
                 .children(items.into_iter().enumerate().map(|(ix, item)| {
                     let action = item.action.clone();
                     let hover = t.colors.button;
+                    let separator = t.colors.separator;
                     div()
                         .id(("ctx-item", ix))
+                        .when(item.separated && ix > 0, |d| d.mt(px(4.)).border_t_1().border_color(separator).pt(px(11.)))
                         .px(px(14.))
                         .py(px(7.))
                         .text_size(t.fs.normal)

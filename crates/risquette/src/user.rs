@@ -239,7 +239,7 @@ impl Render for UserHeader {
                 d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("Last seen {month}")))
             })
             .when(is_self, |d| {
-                d.child(ui::button_with_icon("u-edit", Icon::Pencil, "Edit profile", cx).w_full().on_click(|_, _, cx| nav::go(Target::Settings, cx)))
+                d.child(ui::button_with_icon("u-edit", Icon::Pencil, "Edit profile", cx).justify_center().on_click(|_, _, cx| nav::go(Target::Settings, cx)))
             })
     }
 }

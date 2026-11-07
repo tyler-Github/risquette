@@ -34,7 +34,9 @@ cargo run -p risquette-installer           # the installer (see below)
 | Variable | Effect |
 | --- | --- |
 | `RISQUETTE_BASE_URL` | The instance to connect to. Overrides the one chosen in Settings (default `https://discuit.org`). |
-| `RISQUETTE_CONFIG_DIR` | Use a separate settings folder, for a clean test profile or a portable setup. |
+| `RISQUETTE_CONFIG_DIR` | Use a separate settings folder, for a clean test profile or a portable setup. Only one copy of Risquette runs per settings folder, so a test profile can run alongside your normal one. |
+| `RISQUETTE_WINDOWED` | Open at 1280×900 instead of maximized (used for the branding screenshots, so they stay the same size). |
+| `RISQUETTE_TEST_NOTIFICATION` | Show the tray icon and a sample desktop notification three seconds after start, without needing an account. |
 | `RISQUETTE_UPDATE_URL` | *Build time.* A different default update server to bake into the app (default `https://risquette.xnoid.studio`). |
 | `RUST_LOG` | Logging. For example, `risquette=debug,discuit_api=debug` logs every request (image signatures are redacted). |
 
@@ -115,7 +117,7 @@ These features change data on the server, so they're tested by hand.
 python scripts/make_branding.py   # needs Pillow
 ```
 
-The script also refreshes `assets/risquette.ico`, which gets built into both executables. `branding/framed/` holds the same screenshots with rounded corners and a shadow, which the docs use. To screenshot the crash window without crashing, run `risquette --crash-report <file>` with a saved report. The screenshots in `branding/screenshots/` are window captures of the app, logged out, using a clean `RISQUETTE_CONFIG_DIR`.
+The script also refreshes `assets/risquette.ico`, which gets built into both executables. `branding/framed/` holds the same screenshots with rounded corners and a shadow, which the docs use. To screenshot the crash window without crashing, run `risquette --crash-report <file>` with a saved report. The screenshots in `branding/screenshots/` are window captures of the app, logged out, using a clean `RISQUETTE_CONFIG_DIR` and `RISQUETTE_WINDOWED=1`.
 
 ## Notes
 
