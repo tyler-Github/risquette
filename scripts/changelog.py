@@ -4,6 +4,8 @@
     python scripts/changelog.py notes 0.2.0        # print the release notes for 0.2.0
     python scripts/changelog.py notes 0.2.0 --out notes.md   # ...or write them (UTF-8) to a file
     python scripts/changelog.py prepare 0.2.0      # turn "Unreleased" into 0.2.0 and bump the version
+    python scripts/changelog.py prepare 0.2.0-beta.1   # ...or into a beta; a later `prepare 0.2.0`
+                                                       # folds the betas' notes into the stable release
 
 `prepare` edits CHANGELOG.md, Cargo.toml and Cargo.lock but doesn't commit or
 tag anything; it prints the next steps instead.
@@ -158,27 +160,88 @@ def notes(log: Changelog, version: str) -> str:
     return text + "\n"
 
 
+def is_prerelease(version: str) -> bool:
+    return "-" in version
+
+
+def merge_notes(bodies: list[str]) -> str:
+    """Combine several sections' notes into one, oldest first: free text, then each
+    heading (Added, Changed, …) with its bullets in order, duplicates dropped."""
+    bodies = [b.strip() for b in bodies if b.strip()]
+    if len(bodies) <= 1:
+        return bodies[0] if bodies else ""
+    intro: list[str] = []
+    groups: dict[str, list[str]] = {}
+    for body in bodies:
+        heading = None
+        paragraph: list[str] = []
+        for line in body.split("\n") + [""]:
+            if line.startswith("### "):
+                heading = line[4:].strip()
+                groups.setdefault(heading, [])
+            elif heading is None:
+                # Text before the first heading, kept paragraph by paragraph.
+                if line.strip():
+                    paragraph.append(line)
+                elif paragraph:
+                    text = "\n".join(paragraph)
+                    if text not in intro:
+                        intro.append(text)
+                    paragraph = []
+            elif line.startswith("- "):
+                groups[heading].append(line)
+            elif line.strip() and groups[heading]:
+                # A wrapped continuation of the previous bullet.
+                groups[heading][-1] += "\n" + line
+    order = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
+    headings = [h for h in order if h in groups] + [h for h in groups if h not in order]
+    parts = list(intro)
+    for heading in headings:
+        items: list[str] = []
+        for item in groups[heading]:
+            if item not in items:
+                items.append(item)
+        if items:
+            parts.append(f"### {heading}\n\n" + "\n".join(items))
+    return "\n\n".join(parts)
+
+
 def prepare(log: Changelog, version: str, date: str) -> Changelog:
-    """Move the Unreleased notes into a new `version` section dated `date`."""
+    """Move the Unreleased notes into a new `version` section dated `date`.
+
+    Releasing a stable version after betas of it (0.2.0 after 0.2.0-beta.1, …)
+    folds those betas' notes into the new section, so stable users see
+    everything that changed since the previous stable release.
+    """
     version = version.lstrip("v")
     if not re.fullmatch(VERSION_RE, version):
         raise ChangelogError(f"{version!r} isn't a version like 1.2.3 or 1.2.3-beta.1.")
     if log.section(version):
         raise ChangelogError(f"CHANGELOG.md already has a {version} section.")
     unreleased = log.section("Unreleased")
-    if unreleased is None or not unreleased.body.strip():
-        raise ChangelogError("There's nothing under Unreleased to release. Add the changes there first.")
+    if unreleased is None:
+        raise ChangelogError("CHANGELOG.md has no Unreleased section.")
     releases = log.releases
     if releases and version_key(version) <= version_key(releases[0].name):
         raise ChangelogError(f"{version} must be newer than the latest release, {releases[0].name}.")
 
-    new = Section(version, date, unreleased.body)
+    # Betas of this version, oldest first, when promoting to stable.
+    betas = [] if is_prerelease(version) else [s for s in reversed(releases) if is_prerelease(s.name) and s.name.split("-")[0] == version]
+    body = merge_notes([b.body for b in betas] + [unreleased.body])
+    if not body.strip():
+        raise ChangelogError("There's nothing under Unreleased to release. Add the changes there first.")
+
+    beta_names = {b.name for b in betas}
+    log.sections = [s for s in log.sections if s.name not in beta_names]
+    new = Section(version, date, body)
     unreleased.body = ""
     log.sections.insert(log.sections.index(unreleased) + 1, new)
 
+    # Compare against the previous release that's still listed (betas folded away).
+    previous = next((s.name for s in log.releases if s.name != version), None)
     links = {"Unreleased": f"{REPO}/compare/v{version}...HEAD"}
-    links[version] = f"{REPO}/compare/v{releases[0].name}...v{version}" if releases else f"{REPO}/releases/tag/v{version}"
-    links.update({k: v for k, v in log.links.items() if k not in links})
+    links[version] = f"{REPO}/compare/v{previous}...v{version}" if previous else f"{REPO}/releases/tag/v{version}"
+    links.update({k: v for k, v in log.links.items() if k not in links and k not in beta_names})
     log.links = links
     return log
 
