@@ -49,6 +49,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 - **Any Discuit instance:** switch servers in Settings → Instance. Risquette checks the address before switching and keeps a separate login for each instance.
 - **Settings:** profile picture, about text, preferences, password, muted users and communities, and account deletion. App settings work while logged out too: theme (System, Light or Dark), the feed to open on launch, and how videos open.
 - **Updates:** Risquette checks for new versions in the background, then shows a pill in the toolbar and an update dialog with release notes. Updates download with a progress bar and are checked against their SHA-256 before the app restarts into the new version. There are stable and beta channels, and you can skip a version.
+- **Crash reports:** if something goes wrong, Risquette saves a report and shows a friendly window explaining what happened. It can open a GitHub issue with the details already filled in, or restart the app. Settings → Help & troubleshooting opens the log and crash-report folders.
 - **Installer:** a branded, per-user setup wizard that needs no administrator rights. It creates Start menu and desktop shortcuts, adds an entry in Apps & features, and installs a matching uninstaller.
 - **Interface:** a collapsible sidebar that shrinks to an icon rail, light and dark themes based on Discuit's own design, and [Lucide](https://lucide.dev) icons.
 
@@ -62,6 +63,11 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
     <td align="center"><sub>Updates come with release notes</sub></td>
   </tr>
 </table>
+
+<p align="center">
+  <img alt="The crash window, with steps for reporting the problem" src="../branding/framed/crash-window.png" width="460"><br>
+  <sub>If something goes wrong, Risquette explains what happened and helps report it</sub>
+</p>
 
 ## Keyboard
 

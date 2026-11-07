@@ -604,7 +604,7 @@ impl Render for SaveToListModal {
                 .flex()
                 .gap(px(8.))
                 .items_center()
-                .child(div().flex_1().child(self.new_list.clone()))
+                .child(div().flex_1().min_w_0().flex().flex_col().child(self.new_list.clone()))
                 .child(ui::button("list-create", "Create", cx).on_click(cx.listener(|this, _, _, cx| this.create(cx)))),
         );
         if let Some(e) = &self.error {
