@@ -40,6 +40,15 @@ Only the repository owner can publish releases. The "Protect release tags" rules
    - `RisquetteSetup-<version>-windows-x86_64.exe`
    - `RisquetteSetup-<version>-windows-x86_64.exe.sha256`. The app won't install an update without this file.
 
+### Betas
+
+A beta goes to people on the beta channel first, so you can check a release, including the update itself, before everyone gets it:
+
+1. `python scripts/changelog.py prepare 0.2.0-beta.1`, commit, merge, then tag and push `v0.2.0-beta.1`. It's published as a pre-release.
+2. On an install switched to the beta channel (Settings → Updates), check that it updates and works.
+3. If something needs fixing, merge the fixes with changelog entries as usual, and release `0.2.0-beta.2` the same way. It takes the notes added since beta 1.
+4. When it's ready, `python scripts/changelog.py prepare 0.2.0` promotes it. Even with nothing new under Unreleased, this gathers the notes of every `0.2.0-beta.N` into one `0.2.0` section, merged by heading with duplicates dropped, and removes the beta sections. Stable users then see everything since the last stable release, and the "Full changelog" link compares against it. The betas' GitHub pre-release pages keep their own notes.
+
 ### Release notes
 
 `CHANGELOG.md` is the source of release notes. It follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): changes collect under `## [Unreleased]`, grouped as Added, Changed, Deprecated, Removed, Fixed or Security, and `prepare` turns them into a release. The release workflow publishes that version's section as the release text, plus a "Full changelog" link to the code changes, and the app's update dialog shows it under "What's new". So:

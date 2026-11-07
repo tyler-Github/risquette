@@ -74,6 +74,39 @@ class ChangelogTests(unittest.TestCase):
         log = cl.prepare(cl.parse(SAMPLE), "0.3.0-beta.1", "2026-12-24")
         self.assertEqual(cl.check(cl.parse(cl.render(log))), [])
 
+    def test_beta_then_stable_folds_the_beta_notes_in(self):
+        log = cl.prepare(cl.parse(SAMPLE), "0.3.0-beta.1", "2026-12-20")
+        self.assertEqual(log.section("Unreleased").body, "")
+        # Promoting to stable works with nothing new under Unreleased.
+        log = cl.prepare(cl.parse(cl.render(log)), "0.3.0", "2026-12-24")
+        self.assertEqual([s.name for s in log.sections], ["Unreleased", "0.3.0", "0.2.0", "0.1.0"])
+        self.assertIn("- A thing.", log.section("0.3.0").body)
+        self.assertNotIn("0.3.0-beta.1", log.links)
+        self.assertTrue(log.links["0.3.0"].endswith("compare/v0.2.0...v0.3.0"))
+        self.assertEqual(cl.check(cl.parse(cl.render(log))), [])
+        # Stable notes link to the diff since the previous stable release.
+        self.assertIn("compare/v0.2.0...v0.3.0", cl.notes(log, "0.3.0"))
+
+    def test_two_betas_and_new_changes_merge_by_heading(self):
+        log = cl.prepare(cl.parse(SAMPLE), "0.3.0-beta.1", "2026-12-20")
+        log.section("Unreleased").body = "### Added\n\n- Beta two feature.\n\n### Fixed\n\n- A thing.\n- Beta two fix,\n  wrapped onto a second line."
+        log = cl.prepare(cl.parse(cl.render(log)), "0.3.0-beta.2", "2026-12-21")
+        self.assertEqual(cl.notes(log, "0.3.0-beta.2").split("\n\n**Full")[0].count("- "), 3)
+        log.section("Unreleased").body = "### Changed\n\n- Last-minute change."
+        log = cl.prepare(cl.parse(cl.render(log)), "0.3.0", "2026-12-24")
+        body = log.section("0.3.0").body
+        self.assertEqual(
+            body,
+            "### Added\n\n- Beta two feature.\n\n### Changed\n\n- Last-minute change.\n\n### Fixed\n\n- A thing.\n- Beta two fix,\n  wrapped onto a second line.",
+        )
+        self.assertEqual([s.name for s in log.sections], ["Unreleased", "0.3.0", "0.2.0", "0.1.0"])
+        self.assertEqual(cl.check(cl.parse(cl.render(log))), [])
+
+    def test_a_new_beta_needs_new_notes(self):
+        log = cl.prepare(cl.parse(SAMPLE), "0.3.0-beta.1", "2026-12-20")
+        with self.assertRaises(cl.ChangelogError):
+            cl.prepare(cl.parse(cl.render(log)), "0.3.0-beta.2", "2026-12-21")
+
     def test_check_reports_problems(self):
         broken = SAMPLE.replace("## [0.2.0] - 2026-12-01", "## [0.2.0]").replace("### Fixed", "### Misc")
         problems = " ".join(cl.check(cl.parse(broken)))
