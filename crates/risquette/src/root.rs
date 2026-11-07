@@ -2,6 +2,7 @@
 //! (modals, context menus, toasts).
 
 use crate::{
+    Back, Refresh, ToggleTheme,
     admin::AdminView,
     communities::CommunitiesView,
     community::CommunityView,
@@ -16,28 +17,31 @@ use crate::{
     quick_jump::QuickJump,
     session::{Session, SessionEvent},
     settings::SettingsView,
-    site_aside::SiteAside,
     sidebar::Sidebar,
+    site_aside::SiteAside,
     state::AppState,
     storage, ui,
     user::UserView,
-    Back, Refresh, ToggleTheme,
 };
 use discuit_api::FeedType;
 use gpui::{
-    anchored, deferred, div, prelude::*, px, AnyView, App, Context, Entity, FocusHandle, Focusable,
-    FontWeight, Pixels, Point, SharedString, Subscription, Task, Window,
+    AnyView, App, Context, Entity, FocusHandle, Focusable, FontWeight, Pixels, Point, SharedString, Subscription, Task, Window, anchored, deferred, div,
+    prelude::*, px,
 };
 use risquette_theme::{ActiveTheme, Mode, Theme};
 use std::{rc::Rc, time::Duration};
 
+type TitleFn = Rc<dyn Fn(&App) -> SharedString>;
+type RefreshFn = Rc<dyn Fn(&mut App)>;
+type ControlsFn = Rc<dyn Fn(&App) -> Option<gpui::AnyElement>>;
+
 struct Route {
     target: Target,
     view: AnyView,
-    title: Rc<dyn Fn(&App) -> SharedString>,
-    refresh: Option<Rc<dyn Fn(&mut App)>>,
+    title: TitleFn,
+    refresh: Option<RefreshFn>,
     /// Page controls shown in the toolbar next to the title (e.g. the feed sort).
-    controls: Option<Rc<dyn Fn(&App) -> Option<gpui::AnyElement>>>,
+    controls: Option<ControlsFn>,
 }
 
 pub struct Root {
@@ -72,10 +76,8 @@ impl Root {
                     _ => Target::Home,
                 };
                 this.navigate(if was_first { start } else { Target::Home }, cx);
-                if was_first {
-                    if let Some(t) = cx.try_global::<nav::StartupTarget>().and_then(|s| s.0.clone()) {
-                        this.navigate(t, cx);
-                    }
+                if was_first && let Some(t) = cx.try_global::<nav::StartupTarget>().and_then(|s| s.0.clone()) {
+                    this.navigate(t, cx);
                 }
             }
             cx.notify();
@@ -86,7 +88,18 @@ impl Root {
         subs.push(cx.subscribe(&updater, |_, _, _: &crate::updater::UpdaterEvent, cx| crate::updater::open_dialog(cx)));
         let sidebar = cx.new(Sidebar::new);
         let quick_jump = cx.new(QuickJump::new);
-        let mut this = Self { stack: Vec::new(), sidebar, quick_jump, focus: cx.focus_handle(), modal: None, menu: None, toasts: Vec::new(), next_toast: 0, _subs: subs, _tasks: Vec::new() };
+        let mut this = Self {
+            stack: Vec::new(),
+            sidebar,
+            quick_jump,
+            focus: cx.focus_handle(),
+            modal: None,
+            menu: None,
+            toasts: Vec::new(),
+            next_toast: 0,
+            _subs: subs,
+            _tasks: Vec::new(),
+        };
         this.navigate(Target::All, cx);
         this.start_polling(cx);
         this
@@ -165,7 +178,13 @@ impl Root {
                 let view = cx.new(|cx| UserView::new(name.clone(), cx));
                 let r = view.clone();
                 let title: SharedString = format!("@{name}").into();
-                Route { target: target.clone(), view: view.into(), title: Rc::new(move |_| title.clone()), refresh: Some(Rc::new(move |cx| r.update(cx, |v, cx| v.refresh(cx)))), controls: None }
+                Route {
+                    target: target.clone(),
+                    view: view.into(),
+                    title: Rc::new(move |_| title.clone()),
+                    refresh: Some(Rc::new(move |cx| r.update(cx, |v, cx| v.refresh(cx)))),
+                    controls: None,
+                }
             }
             Target::NewPost { community } => {
                 if !crate::actions::require_login(cx) {
@@ -180,7 +199,13 @@ impl Root {
                 }
                 let view = cx.new(NotificationsView::new);
                 let r = view.clone();
-                Route { target: target.clone(), view: view.into(), title: Rc::new(|_| "Notifications".into()), refresh: Some(Rc::new(move |cx| r.update(cx, |v, cx| v.refresh(cx)))), controls: None }
+                Route {
+                    target: target.clone(),
+                    view: view.into(),
+                    title: Rc::new(|_| "Notifications".into()),
+                    refresh: Some(Rc::new(move |cx| r.update(cx, |v, cx| v.refresh(cx)))),
+                    controls: None,
+                }
             }
             Target::Settings => {
                 let view = cx.new(SettingsView::new);
@@ -400,7 +425,10 @@ impl Root {
                     .gap(px(4.))
                     .children(crate::updater::toolbar_pill(cx))
                     .when(logged_in, |d| d.child(self.render_bell(cx)))
-                    .child(ui::icon_button("nav-refresh", Icon::RefreshCw, "Refresh (F5)", cx).on_click(cx.listener(|this, _, window, cx| this.refresh(&Refresh, window, cx))))
+                    .child(
+                        ui::icon_button("nav-refresh", Icon::RefreshCw, "Refresh (F5)", cx)
+                            .on_click(cx.listener(|this, _, window, cx| this.refresh(&Refresh, window, cx))),
+                    )
                     .child(
                         ui::icon_button(
                             "nav-theme",
@@ -411,7 +439,11 @@ impl Root {
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_theme(&ToggleTheme, window, cx))),
                     )
                     .when(logged_in, |d| {
-                        d.child(ui::button_main_with_icon("nav-new", Icon::Plus, "New post", cx).ml(px(6.)).on_click(|_, _, cx| nav::go(Target::NewPost { community: None }, cx)))
+                        d.child(
+                            ui::button_main_with_icon("nav-new", Icon::Plus, "New post", cx)
+                                .ml(px(6.))
+                                .on_click(|_, _, cx| nav::go(Target::NewPost { community: None }, cx)),
+                        )
                     }),
             )
     }
@@ -430,10 +462,13 @@ impl Root {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _, cx| {
-                        this.modal = None;
-                        cx.notify();
-                    }))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.modal = None;
+                            cx.notify();
+                        }),
+                    )
                     .child(modal)
                     .into_any_element(),
             );
@@ -479,10 +514,13 @@ impl Root {
                     .absolute()
                     .inset_0()
                     .occlude()
-                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _, cx| {
-                        this.menu = None;
-                        cx.notify();
-                    }))
+                    .on_mouse_down(
+                        gpui::MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.menu = None;
+                            cx.notify();
+                        }),
+                    )
                     .child(deferred(anchored().position(pos).snap_to_window_with_margin(px(8.)).child(menu)).with_priority(2))
                     .into_any_element(),
             );
@@ -559,16 +597,7 @@ impl Render for Root {
             .font_family(t.font_family)
             .text_size(t.fs.normal)
             .child(self.sidebar.clone())
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .child(self.render_navbar(cx))
-                    .child(div().flex_1().min_h_0().children(body)),
-            )
+            .child(div().flex_1().min_w_0().h_full().flex().flex_col().child(self.render_navbar(cx)).child(div().flex_1().min_h_0().children(body)))
             .children(overlays)
     }
 }

@@ -8,7 +8,7 @@ use crate::{
     ui,
 };
 use discuit_api::{Comment, Post, PostType};
-use gpui::{div, prelude::*, px, AnyElement, App, ElementId, FontWeight, ObjectFit, SharedString};
+use gpui::{AnyElement, App, ElementId, FontWeight, ObjectFit, SharedString, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 /// The feed column's content width, used to size image previews.
@@ -27,13 +27,7 @@ impl Default for CardOptions {
 }
 
 /// Up arrow, points, down arrow, with the viewer's vote highlighted.
-pub fn vote_pill(
-    id: impl Into<SharedString>,
-    points: i64,
-    vote: Option<bool>,
-    on_vote: impl Fn(bool, &mut App) + Clone + 'static,
-    cx: &App,
-) -> gpui::Div {
+pub fn vote_pill(id: impl Into<SharedString>, points: i64, vote: Option<bool>, on_vote: impl Fn(bool, &mut App) + Clone + 'static, cx: &App) -> gpui::Div {
     let t = cx.theme();
     let id: SharedString = id.into();
     let (up_color, down_color) = (t.colors.upvote, t.colors.downvote);
@@ -77,16 +71,10 @@ pub fn vote_pill(
 
 fn link(id: impl Into<ElementId>, text: impl Into<SharedString>, target: Target, cx: &App) -> gpui::Stateful<gpui::Div> {
     let t = cx.theme();
-    div()
-        .id(id)
-        .text_color(t.colors.text)
-        .cursor_pointer()
-        .hover(|s| s.underline())
-        .child(text.into())
-        .on_click(move |_, _, cx| {
-            cx.stop_propagation();
-            nav::go(target.clone(), cx);
-        })
+    div().id(id).text_color(t.colors.text).cursor_pointer().hover(|s| s.underline()).child(text.into()).on_click(move |_, _, cx| {
+        cx.stop_propagation();
+        nav::go(target.clone(), cx);
+    })
 }
 
 fn user_badge(group: Option<&str>, cx: &App) -> Option<AnyElement> {
@@ -108,17 +96,25 @@ pub fn post_card(post: &Post, key: &str, opts: CardOptions, cx: &mut App) -> Any
     if opts.show_community {
         header = header
             .child(ui::avatar(pro_pic.as_deref(), &post.community_name, px(22.), cx))
-            .child(link(SharedString::from(format!("{key}-comm")), post.community_name.clone(), Target::Community(post.community_name.clone()), cx).font_weight(FontWeight::SEMIBOLD))
+            .child(
+                link(SharedString::from(format!("{key}-comm")), post.community_name.clone(), Target::Community(post.community_name.clone()), cx)
+                    .font_weight(FontWeight::SEMIBOLD),
+            )
             .child("·");
     }
     header = header
         .child("By")
-        .child(link(SharedString::from(format!("{key}-user")), format!("@{}", post.username), Target::User(post.username.clone()), cx).text_color(t.colors.text_light))
+        .child(
+            link(SharedString::from(format!("{key}-user")), format!("@{}", post.username), Target::User(post.username.clone()), cx)
+                .text_color(t.colors.text_light),
+        )
         .children(user_badge(post.user_group.as_deref(), cx))
         .child("·")
         .child(ui::time_ago(post.created_at))
         .when(post.edited_at.is_some(), |d| d.child("· edited"))
-        .when(post.is_pinned || post.is_pinned_site, |d| d.child(icons::sized(Icon::Pin, px(13.), t.colors.green)).child(div().text_color(t.colors.green).child("Pinned")))
+        .when(post.is_pinned || post.is_pinned_site, |d| {
+            d.child(icons::sized(Icon::Pin, px(13.), t.colors.green)).child(div().text_color(t.colors.green).child("Pinned"))
+        })
         .when(post.locked, |d| d.child(icons::sized(Icon::Lock, px(13.), t.colors.red)).child(div().text_color(t.colors.red).child("Locked")));
 
     let title = div()
@@ -254,9 +250,15 @@ pub fn comment_card(comment: &Comment, key: &str, cx: &mut App) -> AnyElement {
                 .gap(px(6.))
                 .text_size(t.fs.s)
                 .text_color(t.colors.text_light)
-                .child(link(SharedString::from(format!("{key}-cu")), format!("@{}", comment.username), Target::User(comment.username.clone()), cx).font_weight(FontWeight::SEMIBOLD))
+                .child(
+                    link(SharedString::from(format!("{key}-cu")), format!("@{}", comment.username), Target::User(comment.username.clone()), cx)
+                        .font_weight(FontWeight::SEMIBOLD),
+                )
                 .child("commented in")
-                .child(link(SharedString::from(format!("{key}-cc")), community.clone(), Target::Community(community.clone()), cx).font_weight(FontWeight::SEMIBOLD))
+                .child(
+                    link(SharedString::from(format!("{key}-cc")), community.clone(), Target::Community(community.clone()), cx)
+                        .font_weight(FontWeight::SEMIBOLD),
+                )
                 .child("·")
                 .child(ui::time_ago(comment.created_at)),
         )
@@ -371,31 +373,21 @@ pub fn carousel(key: &str, post_id: &str, images: &[(discuit_api::Image, Option<
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(format!("{} / {n}", ix + 1)),
             )
-            .child(
+            .child(div().absolute().bottom(px(10.)).left_0().right_0().flex().justify_center().gap(px(6.)).children((0..n).map(|i| {
+                let id = post_id.to_string();
                 div()
-                    .absolute()
-                    .bottom(px(10.))
-                    .left_0()
-                    .right_0()
-                    .flex()
-                    .justify_center()
-                    .gap(px(6.))
-                    .children((0..n).map(|i| {
-                        let id = post_id.to_string();
-                        div()
-                            .id(SharedString::from(format!("{key}-dot-{i}")))
-                            .size(px(8.))
-                            .rounded_full()
-                            .cursor_pointer()
-                            .bg(if i == ix { gpui::white() } else { gpui::white().opacity(0.45) })
-                            .border_1()
-                            .border_color(gpui::black().opacity(0.3))
-                            .on_click(move |_, _, cx| {
-                                cx.stop_propagation();
-                                set_slide(&id, i, cx);
-                            })
-                    })),
-            );
+                    .id(SharedString::from(format!("{key}-dot-{i}")))
+                    .size(px(8.))
+                    .rounded_full()
+                    .cursor_pointer()
+                    .bg(if i == ix { gpui::white() } else { gpui::white().opacity(0.45) })
+                    .border_1()
+                    .border_color(gpui::black().opacity(0.3))
+                    .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
+                        set_slide(&id, i, cx);
+                    })
+            })));
     }
     div()
         .flex()

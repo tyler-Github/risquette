@@ -1,7 +1,7 @@
 //! §8 Notifications & web push.
 
-use super::{q, Client};
-use crate::{models::*, Result};
+use super::{Client, q};
+use crate::{Result, models::*};
 
 impl Client {
     /// GET with `render=true&format=html`, retrying without `format` if the
@@ -35,11 +35,7 @@ impl Client {
 
     /// `POST /api/notifications?action=markAllAsSeen[&type=…]`. **Mutating.**
     pub fn mark_all_notifications_seen(&self, kind: Option<&str>) -> Result<serde_json::Value> {
-        self.http_post(
-            "/api/notifications",
-            q([("action", Some("markAllAsSeen".into())), ("type", kind.map(Into::into))]),
-            serde_json::json!({}),
-        )
+        self.http_post("/api/notifications", q([("action", Some("markAllAsSeen".into())), ("type", kind.map(Into::into))]), serde_json::json!({}))
     }
 
     /// `POST /api/notifications?action=deleteAll`. **Mutating.**
@@ -56,11 +52,7 @@ impl Client {
 
     /// `PUT /api/notifications/{id}?action=markAsSeen&seen=…`. **Mutating.**
     pub fn mark_notification_seen(&self, id: i64, seen: bool) -> Result<Notification> {
-        self.http_put(
-            &format!("/api/notifications/{id}"),
-            q([("action", Some("markAsSeen".into())), ("seen", Some(seen.to_string()))]),
-            serde_json::json!({}),
-        )
+        self.http_put(&format!("/api/notifications/{id}"), q([("action", Some("markAsSeen".into())), ("seen", Some(seen.to_string()))]), serde_json::json!({}))
     }
 
     /// `DELETE /api/notifications/{id}`. **Mutating.**
@@ -84,7 +76,11 @@ mod tests {
     fn falls_back_without_format_and_converts_html() {
         let (base, rx) = serve_seq(vec![
             (400, r#"{"status":400,"code":"invalid-render-format","message":"Invalid render format."}"#, None),
-            (200, r#"{"count":1,"newCount":1,"items":[{"id":5,"type":"comment_reply","title":"<b>bob</b> replied","textFormat":"html","toURL":"/g/post/x"}],"next":null}"#, None),
+            (
+                200,
+                r#"{"count":1,"newCount":1,"items":[{"id":5,"type":"comment_reply","title":"<b>bob</b> replied","textFormat":"html","toURL":"/g/post/x"}],"next":null}"#,
+                None,
+            ),
         ]);
         let page = Client::new(&base).unwrap().notifications(None).unwrap();
         let first = rx.recv().unwrap();

@@ -1,19 +1,18 @@
 //! Create a post: text, image (with uploads) or link.
 
+use crate::community::CommunityAside;
 use crate::{
     icons::{self, Icon},
-    markdown,
     input::{InputEvent, TextInput},
+    markdown,
     nav::{self, Target},
     session::Session,
     state::{api_view, image_from_bytes},
     ui,
 };
-use crate::community::CommunityAside;
 use discuit_api::{Community, NewPost, NewPostImage, PostType, UserGroup};
 use gpui::{
-    deferred, div, img, prelude::*, px, Context, Entity, ExternalPaths, FontWeight, ObjectFit,
-    PathPromptOptions, SharedString, Subscription, Task, Window,
+    Context, Entity, ExternalPaths, FontWeight, ObjectFit, PathPromptOptions, SharedString, Subscription, Task, Window, deferred, div, img, prelude::*, px,
 };
 use risquette_theme::ActiveTheme;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -152,14 +151,18 @@ impl NewPostView {
             return;
         }
         self.aside_for = name.clone();
-        self._tasks.push(api_view(cx, move |c| c.community_by_name(&name), |this, r, cx| {
-            if let Ok(c) = r {
-                if c.name.eq_ignore_ascii_case(&this.aside_for) {
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.community_by_name(&name),
+            |this, r, cx| {
+                if let Ok(c) = r
+                    && c.name.eq_ignore_ascii_case(&this.aside_for)
+                {
                     this.chosen = Some(c.clone());
                     this.aside = Some(cx.new(|cx| CommunityAside::new(c, true, cx)));
                 }
-            }
-        }));
+            },
+        ));
     }
 
     fn selected_community_id(&self, cx: &Context<Self>) -> Option<String> {
@@ -267,14 +270,18 @@ impl NewPostView {
         if url.is_empty() {
             return;
         }
-        self._tasks.push(api_view(cx, move |c| c.link_info(&url), |this, r, cx| match r {
-            Ok(info) => {
-                if let Some(t) = info.title.filter(|t| !t.is_empty()) {
-                    this.title.update(cx, |i, cx| i.set_text(t, cx));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.link_info(&url),
+            |this, r, cx| match r {
+                Ok(info) => {
+                    if let Some(t) = info.title.filter(|t| !t.is_empty()) {
+                        this.title.update(cx, |i, cx| i.set_text(t, cx));
+                    }
                 }
-            }
-            Err(e) => nav::toast(e.user_message(), cx),
-        }));
+                Err(e) => nav::toast(e.user_message(), cx),
+            },
+        ));
     }
 
     fn submit(&mut self, cx: &mut Context<Self>) {
@@ -337,13 +344,17 @@ impl NewPostView {
         }
         self.busy = true;
         self.error = None;
-        self._tasks.push(api_view(cx, move |c| c.create_post(&post), |this, r, cx| {
-            this.busy = false;
-            match r {
-                Ok(p) => nav::go(Target::Post { public_id: p.public_id }, cx),
-                Err(e) => this.error = Some(e.user_message().into()),
-            }
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.create_post(&post),
+            |this, r, cx| {
+                this.busy = false;
+                match r {
+                    Ok(p) => nav::go(Target::Post { public_id: p.public_id }, cx),
+                    Err(e) => this.error = Some(e.user_message().into()),
+                }
+            },
+        ));
         cx.notify();
     }
 }
@@ -402,20 +413,19 @@ impl NewPostView {
                     .rounded(t.metrics.radius)
                     .bg(t.colors.input)
                     .child(ui::avatar(pic.as_deref(), &c.name, px(28.), cx))
+                    .child(div().flex_1().min_w_0().flex().flex_col().child(div().font_weight(FontWeight::SEMIBOLD).child(c.name.clone())).child(
+                        div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!(
+                            "{}{}",
+                            ui::plural(c.no_members, "member"),
+                            if c.posting_restricted { " · only moderators can post" } else { "" }
+                        )),
+                    ))
                     .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .child(div().font_weight(FontWeight::SEMIBOLD).child(c.name.clone()))
-                            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!(
-                                "{}{}",
-                                ui::plural(c.no_members, "member"),
-                                if c.posting_restricted { " · only moderators can post" } else { "" }
-                            ))),
-                    )
-                    .child(ui::button_clear("np-change", cx).text_size(t.fs.s).child("Change").on_click(cx.listener(|this, _, window, cx| this.clear_community(window, cx)))),
+                        ui::button_clear("np-change", cx)
+                            .text_size(t.fs.s)
+                            .child("Change")
+                            .on_click(cx.listener(|this, _, window, cx| this.clear_community(window, cx))),
+                    ),
             );
         }
         // Text field with suggestions floating below it.
@@ -478,7 +488,13 @@ impl NewPostView {
 
     fn body_editor(&self, cx: &mut Context<Self>) -> gpui::Div {
         let t = *cx.theme();
-        let tool = |id: &'static str, icon: Option<Icon>, label: &'static str, tip: &'static str, action: fn(&mut TextInput, &mut Window, &mut Context<TextInput>), this: &Self, _cx: &mut Context<Self>| {
+        let tool = |id: &'static str,
+                    icon: Option<Icon>,
+                    label: &'static str,
+                    tip: &'static str,
+                    action: fn(&mut TextInput, &mut Window, &mut Context<TextInput>),
+                    this: &Self,
+                    _cx: &mut Context<Self>| {
             let body = this.body.clone();
             let el = div()
                 .id(id)
@@ -521,20 +537,14 @@ impl NewPostView {
             .flex()
             .items_center()
             .justify_between()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(2.))
-                    .when(!self.preview, |d| {
-                        d.child(tool("md-b", None, "B", "Bold", |b, w, cx| b.wrap_selection("**", "**", "bold text", w, cx), self, cx))
-                            .child(tool("md-i", None, "I", "Italic", |b, w, cx| b.wrap_selection("*", "*", "italic text", w, cx), self, cx))
-                            .child(tool("md-link", Some(Icon::Link), "", "Link", |b, w, cx| b.wrap_selection("[", "](https://)", "link text", w, cx), self, cx))
-                            .child(tool("md-quote", Some(Icon::MessageSquare), "", "Quote", |b, w, cx| b.prefix_lines("> ", w, cx), self, cx))
-                            .child(tool("md-list", Some(Icon::List), "", "List", |b, w, cx| b.prefix_lines("- ", w, cx), self, cx))
-                            .child(tool("md-code", None, "</>", "Code", |b, w, cx| b.wrap_selection("`", "`", "code", w, cx), self, cx))
-                    }),
-            )
+            .child(div().flex().items_center().gap(px(2.)).when(!self.preview, |d| {
+                d.child(tool("md-b", None, "B", "Bold", |b, w, cx| b.wrap_selection("**", "**", "bold text", w, cx), self, cx))
+                    .child(tool("md-i", None, "I", "Italic", |b, w, cx| b.wrap_selection("*", "*", "italic text", w, cx), self, cx))
+                    .child(tool("md-link", Some(Icon::Link), "", "Link", |b, w, cx| b.wrap_selection("[", "](https://)", "link text", w, cx), self, cx))
+                    .child(tool("md-quote", Some(Icon::MessageSquare), "", "Quote", |b, w, cx| b.prefix_lines("> ", w, cx), self, cx))
+                    .child(tool("md-list", Some(Icon::List), "", "List", |b, w, cx| b.prefix_lines("- ", w, cx), self, cx))
+                    .child(tool("md-code", None, "</>", "Code", |b, w, cx| b.wrap_selection("`", "`", "code", w, cx), self, cx))
+            }))
             .child(div().flex().gap(px(2.)).child(tab("md-write", "Write", false, self, cx)).child(tab("md-preview", "Preview", true, self, cx)));
         let body_text = self.body.read(cx).text().to_string();
         let content = if self.preview {
@@ -573,7 +583,14 @@ impl NewPostView {
             let thumb = match &u.preview {
                 // Absolutely positioned so the image keeps to its tile.
                 Some(p) => img(p.clone()).absolute().top_0().left_0().size_full().object_fit(ObjectFit::Cover).into_any_element(),
-                None => div().absolute().inset_0().flex().items_center().justify_center().child(icons::sized(Icon::Image, px(28.), t.colors.text_light)).into_any_element(),
+                None => div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(icons::sized(Icon::Image, px(28.), t.colors.text_light))
+                    .into_any_element(),
             };
             grid = grid.child(
                 div()
@@ -659,7 +676,9 @@ impl NewPostView {
             .flex_col()
             .gap(px(8.))
             .child(ui::field_label("Images", cx))
-            .when(points < req, |d| d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("You need {req} points to post images (you have {points})."))))
+            .when(points < req, |d| {
+                d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("You need {req} points to post images (you have {points}).")))
+            })
             .child(grid)
     }
 
@@ -675,20 +694,29 @@ impl NewPostView {
             .flex_col()
             .gap(px(6.))
             .child(ui::field_label("Link", cx))
-            .when(points < req, |d| d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("You need {req} points to post links (you have {points})."))))
+            .when(points < req, |d| {
+                d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("You need {req} points to post links (you have {points}).")))
+            })
             .child(
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .child(div().flex_1().flex().flex_col().child(self.url.clone()))
-                    .child(ui::button_with_icon("np-fetch", Icon::RefreshCw, "Use page title", cx).on_click(cx.listener(|this, _, _, cx| this.fetch_title(cx)))),
+                div().flex().gap(px(8.)).child(div().flex_1().flex().flex_col().child(self.url.clone())).child(
+                    ui::button_with_icon("np-fetch", Icon::RefreshCw, "Use page title", cx).on_click(cx.listener(|this, _, _, cx| this.fetch_title(cx))),
+                ),
             )
             .when_some(embed, |d, e| {
                 let label = match e {
                     crate::embed::Embed::Video { provider, .. } => format!("{provider} video — will show as an embedded player"),
                     crate::embed::Embed::Image { .. } => "Image link — will show inline".to_string(),
                 };
-                d.child(div().flex().items_center().gap(px(6.)).text_size(t.fs.xs).text_color(t.colors.green).child(icons::sized(Icon::Check, px(12.), t.colors.green)).child(label))
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_size(t.fs.xs)
+                        .text_color(t.colors.green)
+                        .child(icons::sized(Icon::Check, px(12.), t.colors.green))
+                        .child(label),
+                )
             })
     }
 }
@@ -746,12 +774,15 @@ impl Render for NewPostView {
                     .when(self.error.is_none(), |d| d.when_some(blocker, |d, b| d.child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(b))))
                     .child(ui::button("np-cancel", "Cancel", cx).on_click(|_, window, cx| window.dispatch_action(Box::new(crate::Back), cx)))
                     .child(
-                        ui::disabled(ui::button_main_with_icon("np-submit", Icon::Plus, if self.busy { "Posting…" } else { "Post" }, cx), self.busy || blocker.is_some())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.blocker(cx).is_none() {
-                                    this.submit(cx);
-                                }
-                            })),
+                        ui::disabled(
+                            ui::button_main_with_icon("np-submit", Icon::Plus, if self.busy { "Posting…" } else { "Post" }, cx),
+                            self.busy || blocker.is_some(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if this.blocker(cx).is_none() {
+                                this.submit(cx);
+                            }
+                        })),
                     ),
             );
 
@@ -782,8 +813,14 @@ impl Render for NewPostView {
             Some(a) => a.clone().into_any_element(),
             None => crate::community::aside_section("POSTING TIPS", cx)
                 .child(div().text_size(t.fs.s).child("Pick a community to see its rules here."))
-                .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child("Bodies support markdown — use the toolbar or type **bold**, *italic*, [links](https://example.com), > quotes, lists and `code`."))
-                .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child("Image posts can have several images; drag files onto the form to add them."))
+                .child(
+                    div().text_size(t.fs.s).text_color(t.colors.text_light).child(
+                        "Bodies support markdown — use the toolbar or type **bold**, *italic*, [links](https://example.com), > quotes, lists and `code`.",
+                    ),
+                )
+                .child(
+                    div().text_size(t.fs.s).text_color(t.colors.text_light).child("Image posts can have several images; drag files onto the form to add them."),
+                )
                 .into_any_element(),
         };
         crate::layout::with_aside(main, Some(aside), false, window)

@@ -1,0 +1,3 @@
+# Formatting used across the workspace; CI checks it with `cargo fmt --all --check`.
+max_width = 160
+use_small_heuristics = "Max"

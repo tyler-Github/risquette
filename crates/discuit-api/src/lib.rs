@@ -13,6 +13,6 @@ mod html;
 pub mod models;
 pub mod tree;
 
-pub use client::{mime_for, Client, CommentAction, FeedQuery, NewPost, NewPostImage, PostAction, DEFAULT_BASE_URL};
+pub use client::{Client, CommentAction, DEFAULT_BASE_URL, FeedQuery, NewPost, NewPostImage, PostAction, mime_for};
 pub use error::{ApiError, Error, Result};
 pub use models::*;

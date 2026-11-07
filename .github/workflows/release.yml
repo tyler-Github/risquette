@@ -1,45 +1,61 @@
 # Builds the Windows installer and publishes it to a GitHub release when a
 # version tag is pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
 #
+# Who can release: only the repository owner. A tag ruleset stops anyone else
+# creating `v*` tags, the job below refuses to run for anyone but the owner,
+# and the `release` environment only accepts `v*` tags.
+#
 # The update server (Risquette-Backend) reads these releases:
 #   RisquetteSetup-<version>-windows-x86_64.exe         the installer
 #   RisquetteSetup-<version>-windows-x86_64.exe.sha256  its checksum (required by the app)
 # Tags with a pre-release suffix (v0.3.0-beta.1) become pre-releases and are
 # offered only on the beta channel.
 #
-# Repository settings:
-#   Variables (optional): RISQUETTE_UPDATE_URL  a different update server to bake into the app
-#                         (default: the official https://risquette.xnoid.studio)
-#   Secrets (optional, for code signing): SIGNTOOL_CERT_BASE64, SIGNTOOL_PASSWORD
+# Settings (optional):
+#   Variable RISQUETTE_UPDATE_URL  a different update server to bake into the app
+#                                  (default: the official https://risquette.xnoid.studio)
+#   Secrets in the `release` environment, for code signing:
+#                                  SIGNTOOL_CERT_BASE64, SIGNTOOL_PASSWORD
 
 name: Release
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   windows:
+    name: Build and publish
+    if: github.actor == github.repository_owner
     runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: write # create the GitHub release
     env:
       SIGNTOOL_CERT_BASE64: ${{ secrets.SIGNTOOL_CERT_BASE64 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
 
-      - uses: Swatinem/rust-cache@v2
+      # No build cache here on purpose: release binaries are always built from scratch.
 
       - name: Check the tag matches the crate version
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         run: |
           $version = ((cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq "risquette").version
-          if ("v$version" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} doesn't match Cargo version $version" }
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match Cargo version $version" }
 
       - name: Test
         run: cargo test --workspace --locked
@@ -59,14 +75,13 @@ jobs:
           SIGNTOOL_PASSWORD: ${{ secrets.SIGNTOOL_PASSWORD }}
         run: ./scripts/package.ps1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: installer
           path: dist/*
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: Risquette ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, '-') }}

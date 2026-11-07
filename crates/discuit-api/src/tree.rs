@@ -24,10 +24,7 @@ pub fn build_tree(comments: Vec<Comment>) -> Vec<CommentNode> {
     }
     fn attach(c: Comment, children: &mut HashMap<String, Vec<Comment>>) -> CommentNode {
         let kids = children.remove(&c.id).unwrap_or_default();
-        CommentNode {
-            children: kids.into_iter().map(|k| attach(k, children)).collect(),
-            comment: c,
-        }
+        CommentNode { children: kids.into_iter().map(|k| attach(k, children)).collect(), comment: c }
     }
     roots.into_iter().map(|c| attach(c, &mut children)).collect()
 }
@@ -48,12 +45,7 @@ pub fn flatten(nodes: &[CommentNode], collapsed: &HashSet<String>) -> Vec<Commen
     fn walk(n: &CommentNode, level: usize, collapsed: &HashSet<String>, out: &mut Vec<CommentRow>) {
         let is_collapsed = collapsed.contains(&n.comment.id);
         let loaded = n.children.len() as i64;
-        out.push(CommentRow {
-            comment: n.comment.clone(),
-            level,
-            collapsed: is_collapsed,
-            unloaded_replies: (n.comment.no_replies_direct - loaded).max(0),
-        });
+        out.push(CommentRow { comment: n.comment.clone(), level, collapsed: is_collapsed, unloaded_replies: (n.comment.no_replies_direct - loaded).max(0) });
         if !is_collapsed {
             for c in &n.children {
                 walk(c, level + 1, collapsed, out);
@@ -72,25 +64,13 @@ mod tests {
     use super::*;
 
     fn c(id: &str, parent: Option<&str>, direct: i64) -> Comment {
-        Comment {
-            id: id.into(),
-            parent_id: parent.map(Into::into),
-            no_replies_direct: direct,
-            created_at: Default::default(),
-            ..Default::default()
-        }
+        Comment { id: id.into(), parent_id: parent.map(Into::into), no_replies_direct: direct, created_at: Default::default(), ..Default::default() }
     }
 
     #[test]
     fn builds_and_flattens_out_of_order_list() {
         // Children can arrive after unrelated roots, as on the live API.
-        let list = vec![
-            c("a", None, 1),
-            c("b", None, 0),
-            c("a1", Some("a"), 1),
-            c("a1x", Some("a1"), 0),
-            c("orphan", Some("missing"), 0),
-        ];
+        let list = vec![c("a", None, 1), c("b", None, 0), c("a1", Some("a"), 1), c("a1x", Some("a1"), 0), c("orphan", Some("missing"), 0)];
         let tree = build_tree(list);
         assert_eq!(tree.len(), 3);
         let rows = flatten(&tree, &HashSet::new());

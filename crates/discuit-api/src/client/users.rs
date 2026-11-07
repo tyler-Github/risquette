@@ -1,7 +1,7 @@
 //! §2 Users (profiles, user feeds, profile pictures, badges, hidden posts).
 
-use super::{q, seg, Client};
-use crate::{models::*, Result};
+use super::{Client, q, seg};
+use crate::{Result, models::*};
 use serde_json::json;
 
 impl Client {
@@ -24,11 +24,7 @@ impl Client {
     pub fn user_feed(&self, username: &str, filter: Option<&str>, limit: Option<u32>, next: Option<&str>) -> Result<UserFeedPage> {
         self.http_get(
             &format!("/api/users/{}/feed", seg(username)),
-            q([
-                ("filter", filter.map(Into::into)),
-                ("limit", limit.map(|l| l.to_string())),
-                ("next", next.map(Into::into)),
-            ]),
+            q([("filter", filter.map(Into::into)), ("limit", limit.map(|l| l.to_string())), ("next", next.map(Into::into))]),
         )
     }
 
@@ -50,10 +46,7 @@ impl Client {
     /// `DELETE /api/users/{username}/badges/{badgeId}` (admin). **Mutating.**
     /// With `by_type`, `badge` is a badge type string instead of a numeric id.
     pub fn remove_badge(&self, username: &str, badge: &str, by_type: bool) -> Result<serde_json::Value> {
-        self.http_delete(
-            &format!("/api/users/{}/badges/{}", seg(username), seg(badge)),
-            q([("byType", by_type.then(|| "true".into()))]),
-        )
+        self.http_delete(&format!("/api/users/{}/badges/{}", seg(username), seg(badge)), q([("byType", by_type.then(|| "true".into()))]))
     }
 
     /// `POST /api/hidden_posts`. **Mutating.** `post_id` is the post's `id` (not `publicId`).

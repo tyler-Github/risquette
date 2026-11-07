@@ -1,7 +1,7 @@
 //! §4 Mutes.
 
-use super::{q, seg, Client};
-use crate::{models::*, Result};
+use super::{Client, q, seg};
+use crate::{Result, models::*};
 use serde_json::json;
 
 /// The all-zero id Discuit treats as "not set" in `POST /api/mutes`.

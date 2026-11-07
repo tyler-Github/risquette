@@ -11,7 +11,7 @@ use crate::{
     ui,
 };
 use discuit_api::Community;
-use gpui::{div, prelude::*, px, Context, Entity, FontWeight, SharedString, Subscription, Task, Window};
+use gpui::{Context, Entity, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 use std::{collections::HashSet, time::Duration};
 
@@ -52,10 +52,8 @@ impl CommunitiesView {
             if this.update(cx, |this, _| this.generation != generation).unwrap_or(true) {
                 return;
             }
-            let result = cx
-                .background_executor()
-                .spawn(async move { client.communities(Some(set), (!q.is_empty()).then_some(q.as_str()), None, Some(100)) })
-                .await;
+            let result =
+                cx.background_executor().spawn(async move { client.communities(Some(set), (!q.is_empty()).then_some(q.as_str()), None, Some(100)) }).await;
             this.update(cx, |this, cx| {
                 if this.generation != generation {
                     return;
@@ -83,21 +81,25 @@ impl CommunitiesView {
         }
         let leave = c.user_joined == Some(true);
         let id = c.id.clone();
-        self._tasks.push(api_view(cx, move |cl| cl.join_community(&id, leave), move |this, r, cx| {
-            this.busy.remove(&c.id);
-            match r {
-                Ok(updated) => {
-                    let mut merged = c.clone();
-                    merged.user_joined = updated.user_joined.or(Some(!leave));
-                    merged.no_members = updated.no_members;
-                    if let Some(x) = this.items.as_mut().and_then(|l| l.iter_mut().find(|x| x.id == merged.id)) {
-                        *x = merged.clone();
+        self._tasks.push(api_view(
+            cx,
+            move |cl| cl.join_community(&id, leave),
+            move |this, r, cx| {
+                this.busy.remove(&c.id);
+                match r {
+                    Ok(updated) => {
+                        let mut merged = c.clone();
+                        merged.user_joined = updated.user_joined.or(Some(!leave));
+                        merged.no_members = updated.no_members;
+                        if let Some(x) = this.items.as_mut().and_then(|l| l.iter_mut().find(|x| x.id == merged.id)) {
+                            *x = merged.clone();
+                        }
+                        Session::entity(cx).update(cx, |s, cx| s.community_updated(merged, cx));
                     }
-                    Session::entity(cx).update(cx, |s, cx| s.community_updated(merged, cx));
+                    Err(e) => nav::toast(e.user_message(), cx),
                 }
-                Err(e) => nav::toast(e.user_message(), cx),
-            }
-        }));
+            },
+        ));
         cx.notify();
     }
 }
@@ -155,11 +157,13 @@ impl Render for CommunitiesView {
         let t = *cx.theme();
         let logged_in = Session::get(cx).is_logged_in();
         let set_tab = |set: &'static str, label: &'static str, this: &Self, cx: &mut Context<Self>| {
-            ui::selected(ui::button_clear(SharedString::from(format!("cs-{set}")), cx), this.set == set, cx).child(label).on_click(cx.listener(move |this, _, _, cx| {
-                this.set = set;
-                this.items = None;
-                this.reload(false, cx);
-            }))
+            ui::selected(ui::button_clear(SharedString::from(format!("cs-{set}")), cx), this.set == set, cx).child(label).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.set = set;
+                    this.items = None;
+                    this.reload(false, cx);
+                },
+            ))
         };
         // As many ~380px columns as fit beside the sidebar.
         let usable = (f32::from(window.viewport_size().width) - 320.).min(crate::layout::PAGE_MAX);
@@ -199,25 +203,32 @@ impl Render for CommunitiesView {
                                             .flex()
                                             .flex_col()
                                             .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(c.name.clone()))
-                                            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("{}{}", ui::plural(c.no_members, "member"), if c.nsfw { " · NSFW" } else { "" }))),
+                                            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!(
+                                                "{}{}",
+                                                ui::plural(c.no_members, "member"),
+                                                if c.nsfw { " · NSFW" } else { "" }
+                                            ))),
                                     )
                                     .child(
-                                        ui::disabled(if joined { ui::button_with_icon(("cj", ix), Icon::Check, "Joined", cx) } else { ui::button_main_with_icon(("cj", ix), Icon::Plus, "Join", cx) }, busy)
-                                            .text_size(t.fs.s)
-                                            .px(px(10.))
-                                            .py(px(4.))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                cx.stop_propagation();
-                                                this.toggle_join(ix, cx);
-                                            })),
+                                        ui::disabled(
+                                            if joined {
+                                                ui::button_with_icon(("cj", ix), Icon::Check, "Joined", cx)
+                                            } else {
+                                                ui::button_main_with_icon(("cj", ix), Icon::Plus, "Join", cx)
+                                            },
+                                            busy,
+                                        )
+                                        .text_size(t.fs.s)
+                                        .px(px(10.))
+                                        .py(px(4.))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            cx.stop_propagation();
+                                            this.toggle_join(ix, cx);
+                                        })),
                                     ),
                             )
                             .child(
-                                div()
-                                    .text_size(t.fs.s)
-                                    .text_color(t.colors.text_light)
-                                    .line_clamp(3)
-                                    .child(about.unwrap_or_else(|| "No description.".into())),
+                                div().text_size(t.fs.s).text_color(t.colors.text_light).line_clamp(3).child(about.unwrap_or_else(|| "No description.".into())),
                             )
                             .on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)),
                     );
@@ -241,7 +252,14 @@ impl Render for CommunitiesView {
                         .items_center()
                         .gap(px(10.))
                         .child(div().flex_1().min_w(px(200.)).flex().flex_col().child(self.search.clone()))
-                        .child(div().flex().gap(px(2.)).child(set_tab("all", "All", self, cx)).child(set_tab("default", "Default", self, cx)).when(logged_in, |d| d.child(set_tab("subscribed", "Joined", self, cx))))
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(2.))
+                                .child(set_tab("all", "All", self, cx))
+                                .child(set_tab("default", "Default", self, cx))
+                                .when(logged_in, |d| d.child(set_tab("subscribed", "Joined", self, cx))),
+                        )
                         .child(ui::button_with_icon("c-request", Icon::Inbox, "Request one", cx).on_click(|_, _, cx| open_request_community(cx)))
                         .child(ui::button_main_with_icon("c-create", Icon::Plus, "Create community", cx).on_click(|_, _, cx| open_create_community(cx))),
                 )

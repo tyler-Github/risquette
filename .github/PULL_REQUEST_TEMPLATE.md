@@ -21,7 +21,7 @@ Closes #
 
 <!-- What you ran and what you checked by hand. -->
 
-- [ ] `cargo test --workspace` passes
+- [ ] `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings` and `cargo test --workspace` pass (CI runs the same checks)
 - [ ] Tried it in the running app
 - [ ] For features that change data on the server, I went through the relevant items in the [manual checklist](https://github.com/tyler-Github/risquette/blob/main/docs/development.md#manual-checklist)
 

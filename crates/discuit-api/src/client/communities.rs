@@ -1,8 +1,8 @@
 //! §7 Communities: listing, joining, settings, rules, mods, reports, bans,
 //! images, community requests and content reports.
 
-use super::{q, seg, Client};
-use crate::{models::*, Result};
+use super::{Client, q, seg};
+use crate::{Result, models::*};
 use serde_json::json;
 
 fn path(community_id: &str, rest: &str) -> String {
@@ -14,12 +14,7 @@ impl Client {
     pub fn communities(&self, set: Option<&str>, query: Option<&str>, sort: Option<&str>, limit: Option<u32>) -> Result<Vec<Community>> {
         let v: Option<Vec<Community>> = self.http_get(
             "/api/communities",
-            q([
-                ("set", set.map(Into::into)),
-                ("q", query.map(Into::into)),
-                ("sort", sort.map(Into::into)),
-                ("limit", limit.map(|l| l.to_string())),
-            ]),
+            q([("set", set.map(Into::into)), ("q", query.map(Into::into)), ("sort", sort.map(Into::into)), ("limit", limit.map(|l| l.to_string()))]),
         )?;
         Ok(v.unwrap_or_default())
     }
@@ -59,8 +54,7 @@ impl Client {
 
     /// `POST /api/communities/{id}/rules`. **Mutating.** Returns the refreshed rules.
     pub fn add_rule(&self, community_id: &str, rule: &str, description: Option<&str>) -> Result<Vec<CommunityRule>> {
-        let v: Option<Vec<CommunityRule>> =
-            self.http_post(&path(community_id, "/rules"), Vec::new(), json!({ "rule": rule, "description": description }))?;
+        let v: Option<Vec<CommunityRule>> = self.http_post(&path(community_id, "/rules"), Vec::new(), json!({ "rule": rule, "description": description }))?;
         Ok(v.unwrap_or_default())
     }
 
@@ -71,11 +65,7 @@ impl Client {
 
     /// `PUT /api/communities/{id}/rules/{ruleID}`. **Mutating.**
     pub fn update_rule(&self, community_id: &str, rule_id: i64, rule: &str, description: Option<&str>, z_index: i64) -> Result<CommunityRule> {
-        self.http_put(
-            &path(community_id, &format!("/rules/{rule_id}")),
-            Vec::new(),
-            json!({ "rule": rule, "description": description, "zIndex": z_index }),
-        )
+        self.http_put(&path(community_id, &format!("/rules/{rule_id}")), Vec::new(), json!({ "rule": rule, "description": description, "zIndex": z_index }))
     }
 
     /// `DELETE /api/communities/{id}/rules/{ruleID}`. **Mutating.**

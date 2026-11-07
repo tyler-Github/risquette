@@ -1,7 +1,7 @@
 //! Read-only smoke test against the live instance. GET requests only.
 //! Run explicitly with: `cargo test -p discuit-api --test live_read -- --ignored`
 
-use discuit_api::{Client, FeedQuery, FeedSort, FeedType, DEFAULT_BASE_URL};
+use discuit_api::{Client, DEFAULT_BASE_URL, FeedQuery, FeedSort, FeedType};
 
 #[test]
 #[ignore = "hits the network"]
@@ -19,7 +19,8 @@ fn decodes_live_read_endpoints() {
     }
     let community = initial.communities.unwrap_or_default().into_iter().next().expect("a default community");
     let full = c.community_by_name(&community.name).expect("community");
-    let page = c.feed(&FeedQuery { feed: FeedType::Community, community_id: Some(full.id.clone()), limit: Some(10), ..Default::default() }).expect("community feed");
+    let page =
+        c.feed(&FeedQuery { feed: FeedType::Community, community_id: Some(full.id.clone()), limit: Some(10), ..Default::default() }).expect("community feed");
     let post = page.posts.unwrap_or_default().into_iter().next().expect("a post");
     let detail = c.post(&post.public_id).expect("post");
     c.comments(&post.public_id, None).expect("comments");

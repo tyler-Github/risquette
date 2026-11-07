@@ -2,7 +2,7 @@
 //! files go to `%LOCALAPPDATA%\Programs\Risquette`, the uninstall entry to
 //! `HKCU\...\Uninstall\Risquette`, shortcuts to the user's Start menu and desktop.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -43,7 +43,7 @@ pub fn default_dir() -> PathBuf {
 pub fn installed_dir() -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
         let key = RegKey::predef(HKEY_CURRENT_USER).open_subkey(UNINSTALL_KEY).ok()?;
         let dir: String = key.get_value("InstallLocation").ok()?;
         let dir = PathBuf::from(dir);
@@ -57,7 +57,7 @@ pub fn installed_dir() -> Option<PathBuf> {
 pub fn installed_version() -> Option<String> {
     #[cfg(windows)]
     {
-        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
         let key = RegKey::predef(HKEY_CURRENT_USER).open_subkey(UNINSTALL_KEY).ok()?;
         return key.get_value("DisplayVersion").ok();
     }
@@ -166,11 +166,11 @@ fn shortcuts(opts: &Options) -> Result<()> {
 #[cfg(windows)]
 fn create_shortcut(target: &Path, workdir: &Path, link: &Path) -> Result<()> {
     use windows::{
-        core::{Interface, HSTRING},
         Win32::{
-            System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED},
+            System::Com::{CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile},
             UI::Shell::{IShellLinkW, ShellLink},
         },
+        core::{HSTRING, Interface},
     };
     if let Some(parent) = link.parent() {
         std::fs::create_dir_all(parent)?;
@@ -201,7 +201,7 @@ fn create_shortcut(_target: &Path, _workdir: &Path, _link: &Path) -> Result<()> 
 
 #[cfg(windows)]
 fn register(opts: &Options, app_size: u64) -> Result<()> {
-    use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+    use winreg::{RegKey, enums::HKEY_CURRENT_USER};
     let (key, _) = RegKey::predef(HKEY_CURRENT_USER).create_subkey(UNINSTALL_KEY)?;
     let dir = opts.dir.to_string_lossy().to_string();
     let uninstaller = opts.dir.join(UNINSTALL_EXE).to_string_lossy().to_string();
@@ -238,7 +238,7 @@ pub fn uninstall(dir: &Path, remove_data: bool, progress: Progress) -> Result<()
     progress(0.6, "Unregistering…");
     #[cfg(windows)]
     {
-        use winreg::{enums::HKEY_CURRENT_USER, RegKey};
+        use winreg::{RegKey, enums::HKEY_CURRENT_USER};
         let _ = RegKey::predef(HKEY_CURRENT_USER).delete_subkey_all(UNINSTALL_KEY);
     }
     if remove_data {
@@ -278,7 +278,7 @@ pub fn wait_for_pid(pid: u32) {
     unsafe {
         use windows::Win32::{
             Foundation::CloseHandle,
-            System::Threading::{OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE},
+            System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject},
         };
         if let Ok(handle) = OpenProcess(PROCESS_SYNCHRONIZE, false, pid) {
             WaitForSingleObject(handle, 60_000);

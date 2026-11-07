@@ -2,8 +2,8 @@
 //! most mod/admin actions), plus report and save-to-list dialogs.
 
 use crate::{
-    icons::Icon,
     bus::{self, ContentEvent},
+    icons::Icon,
     input::{InputEvent, TextInput},
     nav,
     session::Session,
@@ -11,10 +11,7 @@ use crate::{
     ui,
 };
 use discuit_api::{Comment, ContentType, List, NewList, Post};
-use gpui::{
-    div, prelude::*, px, AnyElement, App, AppContext, Context, Entity, FontWeight, SharedString,
-    Subscription, Task, Window,
-};
+use gpui::{AnyElement, App, AppContext, Context, Entity, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 use std::{collections::HashSet, rc::Rc};
 
@@ -51,6 +48,9 @@ pub fn frame(title: impl Into<SharedString>, width: f32, body: impl IntoElement,
 // ---------------------------------------------------------------------------
 // Generic form modal
 // ---------------------------------------------------------------------------
+
+/// A link shown under a form (e.g. "Forgot password?").
+pub type LinkAction = Rc<dyn Fn(&mut App)>;
 
 #[derive(Clone)]
 pub enum FieldKind {
@@ -98,12 +98,16 @@ pub struct FormSpec {
     pub submit_label: SharedString,
     pub danger: bool,
     pub width: f32,
-    pub links: Vec<(SharedString, Rc<dyn Fn(&mut App)>)>,
+    pub links: Vec<(SharedString, LinkAction)>,
     pub on_submit: Submit,
 }
 
 impl FormSpec {
-    pub fn new(title: impl Into<SharedString>, submit_label: impl Into<SharedString>, on_submit: impl Fn(Values, &mut App) -> Task<Result<(), String>> + 'static) -> Self {
+    pub fn new(
+        title: impl Into<SharedString>,
+        submit_label: impl Into<SharedString>,
+        on_submit: impl Fn(Values, &mut App) -> Task<Result<(), String>> + 'static,
+    ) -> Self {
         Self {
             title: title.into(),
             description: None,
@@ -256,26 +260,26 @@ impl Render for FormModal {
             })
             .collect();
         body = body.child(
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .pt(px(4.))
-                .child(div().flex().flex_col().gap(px(4.)).children(links))
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(8.))
-                        .child(ui::button("form-cancel", "Cancel", cx).on_click(|_, _, cx| nav::close_modal(cx)))
-                        .child(ui::disabled(submit, self.busy).on_click(cx.listener(|this, _, _, cx| this.submit(cx)))),
-                ),
+            div().flex().items_center().justify_between().pt(px(4.)).child(div().flex().flex_col().gap(px(4.)).children(links)).child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .child(ui::button("form-cancel", "Cancel", cx).on_click(|_, _, cx| nav::close_modal(cx)))
+                    .child(ui::disabled(submit, self.busy).on_click(cx.listener(|this, _, _, cx| this.submit(cx)))),
+            ),
         );
         frame(self.spec.title.clone(), self.spec.width, body, cx)
     }
 }
 
 /// A yes/no confirmation; `on_confirm` runs after the user accepts.
-pub fn confirm(title: impl Into<SharedString>, message: impl Into<SharedString>, confirm_label: impl Into<SharedString>, on_confirm: impl Fn(&mut App) + 'static, cx: &mut App) {
+pub fn confirm(
+    title: impl Into<SharedString>,
+    message: impl Into<SharedString>,
+    confirm_label: impl Into<SharedString>,
+    on_confirm: impl Fn(&mut App) + 'static,
+    cx: &mut App,
+) {
     FormSpec::new(title, confirm_label, move |_, cx| {
         on_confirm(cx);
         Task::ready(Ok(()))
@@ -299,7 +303,7 @@ pub fn open_login(cx: &mut App) {
     })
     .field(Field::text("Username", "").placeholder("Username"))
     .field(Field::password("Password").placeholder("Password"))
-    .link("Don't have an account? Sign up", |cx| open_signup(cx))
+    .link("Don't have an account? Sign up", open_signup)
     .link("Forgot password? (opens website)", |cx| {
         let url = crate::state::AppState::client(cx).web_url("/forgot-password");
         cx.open_url(&url)
@@ -327,7 +331,7 @@ pub fn open_signup(cx: &mut App) {
     .field(Field::text("Email (optional)", "").placeholder("you@example.com"))
     .field(Field::password("Password"))
     .field(Field::password("Repeat password"))
-    .link("Already have an account? Log in", |cx| open_login(cx))
+    .link("Already have an account? Log in", open_login)
     .link("Sign up on the website instead", |cx| {
         let url = crate::state::AppState::client(cx).web_url("/");
         cx.open_url(&url)
@@ -411,9 +415,11 @@ impl Render for ReportModal {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *cx.theme();
         let reasons = Session::get(cx).report_reasons().to_vec();
-        let mut body = div().flex().flex_col().gap(px(8.)).child(
-            div().text_size(t.fs.normal).text_color(t.colors.text_light).child("Why are you reporting this? Moderators will review it."),
-        );
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .child(div().text_size(t.fs.normal).text_color(t.colors.text_light).child("Why are you reporting this? Moderators will review it."));
         for r in reasons {
             let selected = self.reason == Some(r.id);
             let id = r.id;
@@ -451,20 +457,24 @@ impl Render for ReportModal {
                         }
                         this.busy = true;
                         let (kind, id) = (this.kind, this.target_id.clone());
-                        this._task = Some(api_view(cx, move |c| c.report(kind, &id, reason), |this, r, cx| {
-                            this.busy = false;
-                            match r {
-                                Ok(_) => {
-                                    nav::close_modal(cx);
-                                    nav::toast("Thanks — your report was sent.", cx);
+                        this._task = Some(api_view(
+                            cx,
+                            move |c| c.report(kind, &id, reason),
+                            |this, r, cx| {
+                                this.busy = false;
+                                match r {
+                                    Ok(_) => {
+                                        nav::close_modal(cx);
+                                        nav::toast("Thanks — your report was sent.", cx);
+                                    }
+                                    Err(e) if e.code() == Some("already-voted") => {
+                                        nav::close_modal(cx);
+                                        nav::toast("You've already reported this.", cx);
+                                    }
+                                    Err(e) => this.error = Some(e.user_message().into()),
                                 }
-                                Err(e) if e.code() == Some("already-voted") => {
-                                    nav::close_modal(cx);
-                                    nav::toast("You've already reported this.", cx);
-                                }
-                                Err(e) => this.error = Some(e.user_message().into()),
-                            }
-                        }));
+                            },
+                        ));
                         cx.notify();
                     },
                 )),
@@ -480,7 +490,16 @@ impl Render for ReportModal {
 
 pub fn open_save_to_list(kind: ContentType, target_id: String, cx: &mut App) {
     let view = cx.new(|cx| {
-        let mut m = SaveToListModal { kind, target_id, lists: None, saved_in: HashSet::new(), busy: HashSet::new(), error: None, new_list: cx.new(|cx| TextInput::new(cx).placeholder("New list name")), _tasks: Vec::new() };
+        let mut m = SaveToListModal {
+            kind,
+            target_id,
+            lists: None,
+            saved_in: HashSet::new(),
+            busy: HashSet::new(),
+            error: None,
+            new_list: cx.new(|cx| TextInput::new(cx).placeholder("New list name")),
+            _tasks: Vec::new(),
+        };
         m.load(cx);
         m
     });
@@ -549,13 +568,17 @@ impl SaveToListModal {
         }
         let slug: String = name.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
         let list = NewList { name: slug, display_name: Some(name), description: None, public: false };
-        self._tasks.push(api_view(cx, move |c| c.create_list(&username, &list), |this, r, cx| match r {
-            Ok(lists) => {
-                this.lists = Some(lists);
-                this.new_list.update(cx, |i, cx| i.clear(cx));
-            }
-            Err(e) => this.error = Some(e.user_message().into()),
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.create_list(&username, &list),
+            |this, r, cx| match r {
+                Ok(lists) => {
+                    this.lists = Some(lists);
+                    this.new_list.update(cx, |i, cx| i.clear(cx));
+                }
+                Err(e) => this.error = Some(e.user_message().into()),
+            },
+        ));
     }
 }
 
@@ -571,7 +594,8 @@ impl Render for SaveToListModal {
                     let checked = self.saved_in.contains(&l.id);
                     let id = l.id;
                     let label = format!("{}{}", l.title(), if self.busy.contains(&l.id) { " …" } else { "" });
-                    body = body.child(ui::checkbox(("list", l.id as usize), checked, label, cx).on_click(cx.listener(move |this, _, _, cx| this.toggle(id, cx))));
+                    body =
+                        body.child(ui::checkbox(("list", l.id as usize), checked, label, cx).on_click(cx.listener(move |this, _, _, cx| this.toggle(id, cx))));
                 }
             }
         }

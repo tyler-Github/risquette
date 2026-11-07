@@ -5,11 +5,11 @@ use crate::{
     icons::Icon,
     nav::{self, Target},
     session::Session,
-    state::{api_view, AppState},
+    state::{AppState, api_view},
     ui,
 };
 use discuit_api::Community;
-use gpui::{div, prelude::*, px, Context, FontWeight, Task, Window};
+use gpui::{Context, FontWeight, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct SiteAside {
@@ -20,13 +20,17 @@ pub struct SiteAside {
 impl SiteAside {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let mut this = Self { popular: Vec::new(), _task: None };
-        this._task = Some(api_view(cx, |c| c.communities(Some("default"), None, None, Some(50)), |this, r, _| {
-            if let Ok(mut list) = r {
-                list.sort_by_key(|c| std::cmp::Reverse(c.no_members));
-                list.truncate(10);
-                this.popular = list;
-            }
-        }));
+        this._task = Some(api_view(
+            cx,
+            |c| c.communities(Some("default"), None, None, Some(50)),
+            |this, r, _| {
+                if let Ok(mut list) = r {
+                    list.sort_by_key(|c| std::cmp::Reverse(c.no_members));
+                    list.truncate(10);
+                    this.popular = list;
+                }
+            },
+        ));
         this
     }
 }
@@ -39,9 +43,19 @@ impl Render for SiteAside {
         let logged_in = session.is_logged_in();
 
         let about = aside_section("DISCUIT", cx)
-            .child(div().text_size(t.fs.s).child("A free and open-source community platform. Join communities, share posts and talk with people who share your interests."))
+            .child(
+                div()
+                    .text_size(t.fs.s)
+                    .child("A free and open-source community platform. Join communities, share posts and talk with people who share your interests."),
+            )
             .when(users > 0, |d| {
-                d.child(div().flex().flex_col().child(div().font_weight(FontWeight::BOLD).text_size(t.fs.l).child(ui::compact(users))).child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child("people on Discuit")))
+                d.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(div().font_weight(FontWeight::BOLD).text_size(t.fs.l).child(ui::compact(users)))
+                        .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child("people on Discuit")),
+                )
             })
             .child(
                 div()
@@ -49,7 +63,12 @@ impl Render for SiteAside {
                     .flex_wrap()
                     .gap(px(6.))
                     .child(ui::button_with_icon("sa-explore", Icon::Compass, "Explore", cx).on_click(|_, _, cx| nav::go(Target::Communities, cx)))
-                    .when(logged_in, |d| d.child(ui::button_main_with_icon("sa-new", Icon::Plus, "New post", cx).on_click(|_, _, cx| nav::go(Target::NewPost { community: None }, cx)))),
+                    .when(logged_in, |d| {
+                        d.child(
+                            ui::button_main_with_icon("sa-new", Icon::Plus, "New post", cx)
+                                .on_click(|_, _, cx| nav::go(Target::NewPost { community: None }, cx)),
+                        )
+                    }),
             );
 
         let mut popular = aside_section("POPULAR COMMUNITIES", cx);
@@ -90,7 +109,18 @@ impl Render for SiteAside {
                             )
                             .on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)),
                     )
-                    .when(logged_in, |d| d.child(join_button(if ix < 10 { ["sa-j0", "sa-j1", "sa-j2", "sa-j3", "sa-j4", "sa-j5", "sa-j6", "sa-j7", "sa-j8", "sa-j9"][ix] } else { "sa-jx" }, &c, cx).text_size(t.fs.xs).px(px(8.)).py(px(3.)))),
+                    .when(logged_in, |d| {
+                        d.child(
+                            join_button(
+                                if ix < 10 { ["sa-j0", "sa-j1", "sa-j2", "sa-j3", "sa-j4", "sa-j5", "sa-j6", "sa-j7", "sa-j8", "sa-j9"][ix] } else { "sa-jx" },
+                                &c,
+                                cx,
+                            )
+                            .text_size(t.fs.xs)
+                            .px(px(8.))
+                            .py(px(3.)),
+                        )
+                    }),
             );
         }
 
@@ -103,9 +133,19 @@ impl Render for SiteAside {
             .gap(px(6.))
             .child(div().flex().flex_wrap().gap(px(10.)).text_size(t.fs.xs).children(links.into_iter().map(|(label, path)| {
                 let url = client.web_url(path);
-                div().id(label).text_color(t.colors.text_light).cursor_pointer().hover(|s| s.underline()).child(label).on_click(move |_, _, cx| cx.open_url(&url))
+                div()
+                    .id(label)
+                    .text_color(t.colors.text_light)
+                    .cursor_pointer()
+                    .hover(|s| s.underline())
+                    .child(label)
+                    .on_click(move |_, _, cx| cx.open_url(&url))
             })))
-            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(concat!("Risquette ", env!("CARGO_PKG_VERSION"), " · an open-source Discuit client")));
+            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(concat!(
+                "Risquette ",
+                env!("CARGO_PKG_VERSION"),
+                " · an open-source Discuit client"
+            )));
 
         div().flex().flex_col().gap(px(12.)).child(about).child(popular).child(footer)
     }

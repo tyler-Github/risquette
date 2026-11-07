@@ -1,7 +1,7 @@
 //! §10 Admin, site settings, analytics & IP blocks.
 
-use super::{q, Client};
-use crate::{models::*, Result};
+use super::{Client, q};
+use crate::{Result, models::*};
 use serde_json::json;
 
 impl Client {

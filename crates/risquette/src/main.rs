@@ -7,8 +7,8 @@ mod actions;
 mod admin;
 mod bus;
 mod communities;
-mod embed;
 mod community;
+mod embed;
 mod feed;
 mod icons;
 mod input;
@@ -36,10 +36,7 @@ mod updater;
 mod user;
 
 use discuit_api::{Client, DEFAULT_BASE_URL};
-use gpui::{
-    actions, px, size, App, AppContext, Application, Bounds, Focusable, KeyBinding, TitlebarOptions,
-    WindowAppearance, WindowBounds, WindowOptions,
-};
+use gpui::{App, AppContext, Application, Bounds, Focusable, KeyBinding, TitlebarOptions, WindowAppearance, WindowBounds, WindowOptions, actions, px, size};
 use risquette_theme::{Mode, Theme};
 use std::sync::Arc;
 
@@ -59,10 +56,7 @@ fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("risquette=info,discuit_api=info")).init();
 
     // Instance: env override, then the one chosen in Settings, then discuit.org.
-    let base_url = std::env::var("RISQUETTE_BASE_URL")
-        .ok()
-        .or_else(|| storage::load().instance)
-        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    let base_url = std::env::var("RISQUETTE_BASE_URL").ok().or_else(|| storage::load().instance).unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
     let client = Client::new(&base_url).expect("valid base url");
     log::info!("connecting to {base_url}");
     // `risquette <discuit link or path>` opens that page, e.g. `risquette https://discuit.org/@alice`.

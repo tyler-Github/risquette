@@ -16,9 +16,9 @@ mod users;
 
 pub use posts::{CommentAction, FeedQuery, NewPost, NewPostImage, PostAction};
 
-use crate::{error::ApiError, Error, Result};
+use crate::{Error, Result, error::ApiError};
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 use url::Url;
 
@@ -68,11 +68,7 @@ impl Client {
             .user_agent(concat!("Risquette/", env!("CARGO_PKG_VERSION")))
             .timeout_global(Some(Duration::from_secs(60)))
             .build();
-        Ok(Self {
-            agent: ureq::Agent::new_with_config(config),
-            base: Url::parse(base_url)?,
-            cookies: Mutex::new(BTreeMap::new()),
-        })
+        Ok(Self { agent: ureq::Agent::new_with_config(config), base: Url::parse(base_url)?, cookies: Mutex::new(BTreeMap::new()) })
     }
 
     pub fn base_url(&self) -> &Url {
@@ -209,9 +205,7 @@ impl Client {
                 match body {
                     Body::None => req.header("Content-Type", "application/json").send(&b"{}"[..])?,
                     Body::Json(v) => req.header("Content-Type", "application/json").send(serde_json::to_vec(&v)?)?,
-                    Body::Multipart { boundary, bytes } => req
-                        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-                        .send(bytes)?,
+                    Body::Multipart { boundary, bytes } => req.header("Content-Type", format!("multipart/form-data; boundary={boundary}")).send(bytes)?,
                 }
             }
         };
@@ -275,8 +269,7 @@ fn multipart_image(file_name: &str, bytes: &[u8]) -> (String, Vec<u8>) {
     let safe_name: String = file_name.chars().filter(|c| *c != '"' && *c != '\r' && *c != '\n').collect();
     let mut body = Vec::with_capacity(bytes.len() + 256);
     body.extend_from_slice(
-        format!("--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{safe_name}\"\r\nContent-Type: {mime}\r\n\r\n")
-            .as_bytes(),
+        format!("--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{safe_name}\"\r\nContent-Type: {mime}\r\n\r\n").as_bytes(),
     );
     body.extend_from_slice(bytes);
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
@@ -334,41 +327,36 @@ pub(crate) mod test_server {
         let addr = listener.local_addr().unwrap();
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
-          for (status, body, set_cookie) in responses {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut buf = Vec::new();
-            let mut chunk = [0u8; 4096];
-            let header_end = loop {
-                let n = stream.read(&mut chunk).unwrap();
-                buf.extend_from_slice(&chunk[..n]);
-                if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                    break i + 4;
+            for (status, body, set_cookie) in responses {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 4096];
+                let header_end = loop {
+                    let n = stream.read(&mut chunk).unwrap();
+                    buf.extend_from_slice(&chunk[..n]);
+                    if let Some(i) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                        break i + 4;
+                    }
+                };
+                let head = String::from_utf8_lossy(&buf[..header_end]).to_string();
+                let mut lines = head.split("\r\n");
+                let request_line = lines.next().unwrap().to_string();
+                let headers: Vec<(String, String)> =
+                    lines.filter_map(|l| l.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))).collect();
+                let len: usize = headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("content-length")).map(|(_, v)| v.parse().unwrap()).unwrap_or(0);
+                while buf.len() < header_end + len {
+                    let n = stream.read(&mut chunk).unwrap();
+                    buf.extend_from_slice(&chunk[..n]);
                 }
-            };
-            let head = String::from_utf8_lossy(&buf[..header_end]).to_string();
-            let mut lines = head.split("\r\n");
-            let request_line = lines.next().unwrap().to_string();
-            let headers: Vec<(String, String)> = lines
-                .filter_map(|l| l.split_once(':').map(|(k, v)| (k.trim().to_string(), v.trim().to_string())))
-                .collect();
-            let len: usize = headers
-                .iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
-                .map(|(_, v)| v.parse().unwrap())
-                .unwrap_or(0);
-            while buf.len() < header_end + len {
-                let n = stream.read(&mut chunk).unwrap();
-                buf.extend_from_slice(&chunk[..n]);
+                let req_body = buf[header_end..header_end + len].to_vec();
+                let cookie = set_cookie.map(|c| format!("Set-Cookie: {c}\r\n")).unwrap_or_default();
+                let resp = format!(
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{cookie}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                stream.write_all(resp.as_bytes()).unwrap();
+                tx.send(Recorded { request_line, headers, body: req_body }).unwrap();
             }
-            let req_body = buf[header_end..header_end + len].to_vec();
-            let cookie = set_cookie.map(|c| format!("Set-Cookie: {c}\r\n")).unwrap_or_default();
-            let resp = format!(
-                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{cookie}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            );
-            stream.write_all(resp.as_bytes()).unwrap();
-            tx.send(Recorded { request_line, headers, body: req_body }).unwrap();
-          }
         });
         (format!("http://{addr}"), rx)
     }

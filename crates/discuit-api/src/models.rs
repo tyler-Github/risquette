@@ -73,16 +73,8 @@ pub enum FeedSort {
 }
 
 impl FeedSort {
-    pub const ALL: [FeedSort; 8] = [
-        FeedSort::Hot,
-        FeedSort::Latest,
-        FeedSort::Activity,
-        FeedSort::TopDay,
-        FeedSort::TopWeek,
-        FeedSort::TopMonth,
-        FeedSort::TopYear,
-        FeedSort::TopAll,
-    ];
+    pub const ALL: [FeedSort; 8] =
+        [FeedSort::Hot, FeedSort::Latest, FeedSort::Activity, FeedSort::TopDay, FeedSort::TopWeek, FeedSort::TopMonth, FeedSort::TopYear, FeedSort::TopAll];
 
     /// Sorts that work for community feeds. Discuit currently answers
     /// `500` for day/week/month/year on `feed=community`.
@@ -205,12 +197,7 @@ impl Image {
     pub fn best_url(&self, min_width: u32) -> &str {
         let mut copies: Vec<&ImageCopy> = self.copies.iter().collect();
         copies.sort_by_key(|c| c.width);
-        copies
-            .iter()
-            .find(|c| c.width >= min_width)
-            .or(copies.last())
-            .map(|c| c.url.as_str())
-            .unwrap_or(&self.url)
+        copies.iter().find(|c| c.width >= min_width).or(copies.last()).map(|c| c.url.as_str()).unwrap_or(&self.url)
     }
 
     pub fn copy(&self, name: &str) -> Option<&ImageCopy> {
@@ -454,19 +441,12 @@ impl Post {
 
     /// The first image of an image post (newer posts use `images`, older ones `image`).
     pub fn primary_image(&self) -> Option<&Image> {
-        self.images
-            .as_ref()
-            .and_then(|imgs| imgs.iter().find_map(|i| i.image.as_ref()))
-            .or(self.image.as_ref())
+        self.images.as_ref().and_then(|imgs| imgs.iter().find_map(|i| i.image.as_ref())).or(self.image.as_ref())
     }
 
     /// The viewer's vote: `Some(true)` up, `Some(false)` down, `None` none / anonymous.
     pub fn vote(&self) -> Option<bool> {
-        if self.user_voted == Some(true) {
-            self.user_voted_up
-        } else {
-            None
-        }
+        if self.user_voted == Some(true) { self.user_voted_up } else { None }
     }
 }
 
@@ -531,11 +511,7 @@ impl Comment {
     }
 
     pub fn vote(&self) -> Option<bool> {
-        if self.user_voted == Some(true) {
-            self.user_voted_up
-        } else {
-            None
-        }
+        if self.user_voted == Some(true) { self.user_voted_up } else { None }
     }
 }
 
@@ -1089,7 +1065,10 @@ mod tests {
 
     #[test]
     fn titles_are_flattened() {
-        let p: Post = serde_json::from_str(r#"{"id":"1","type":"text","publicId":"p","createdAt":"2026-11-01T10:00:00Z","images":[],"title":"\nI Built a  Luxury\r\nMousetrap "}"#).unwrap();
+        let p: Post = serde_json::from_str(
+            r#"{"id":"1","type":"text","publicId":"p","createdAt":"2026-11-01T10:00:00Z","images":[],"title":"\nI Built a  Luxury\r\nMousetrap "}"#,
+        )
+        .unwrap();
         assert_eq!(p.title, "I Built a Luxury Mousetrap");
     }
 
@@ -1137,8 +1116,7 @@ mod tests {
 
     #[test]
     fn average_color_both_shapes() {
-        let mut img = Image::default();
-        img.average_color = Some(serde_json::json!("rgb(27,69,157)"));
+        let mut img = Image { average_color: Some(serde_json::json!("rgb(27,69,157)")), ..Default::default() };
         assert_eq!(img.average_rgb(), Some((27, 69, 157)));
         img.average_color = Some(serde_json::json!({"r": 1, "g": 2, "b": 3}));
         assert_eq!(img.average_rgb(), Some((1, 2, 3)));
@@ -1165,11 +1143,7 @@ mod tests {
     #[test]
     fn best_url_picks_smallest_sufficient_copy() {
         let mk = |w, u: &str| ImageCopy { width: w, url: u.into(), ..Default::default() };
-        let img = Image {
-            url: "orig".into(),
-            copies: vec![mk(720, "m"), mk(120, "t"), mk(325, "s")],
-            ..Default::default()
-        };
+        let img = Image { url: "orig".into(), copies: vec![mk(720, "m"), mk(120, "t"), mk(325, "s")], ..Default::default() };
         assert_eq!(img.best_url(300), "s");
         assert_eq!(img.best_url(2000), "m");
         assert_eq!(Image { url: "orig".into(), ..Default::default() }.best_url(1), "orig");

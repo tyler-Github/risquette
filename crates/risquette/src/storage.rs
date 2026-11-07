@@ -58,10 +58,7 @@ fn file() -> Option<PathBuf> {
 }
 
 pub fn load() -> Stored {
-    file()
-        .and_then(|f| std::fs::read(f).ok())
-        .and_then(|b| serde_json::from_slice(&b).ok())
-        .unwrap_or_default()
+    file().and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 pub fn save(state: &Stored) {

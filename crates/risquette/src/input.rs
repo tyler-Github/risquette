@@ -4,11 +4,9 @@
 //! Adapted from GPUI's `examples/input.rs` (Apache-2.0, Zed Industries).
 
 use gpui::{
-    actions, div, fill, point, prelude::*, px, size, App, Bounds, ClipboardItem, ContentMask,
-    Context, CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler, EventEmitter,
-    FocusHandle, Focusable, GlobalElementId, Hsla, KeyBinding, LayoutId, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, SharedString, Style,
-    TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, WrappedLine,
+    App, Bounds, ClipboardItem, ContentMask, Context, CursorStyle, ElementId, ElementInputHandler, Entity, EntityInputHandler, EventEmitter, FocusHandle,
+    Focusable, GlobalElementId, Hsla, KeyBinding, LayoutId, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, PaintQuad, Pixels, Point, SharedString,
+    Style, TextAlign, TextRun, UTF16Selection, UnderlineStyle, Window, WrappedLine, actions, div, fill, point, prelude::*, px, size,
 };
 use risquette_theme::ActiveTheme;
 use std::ops::Range;
@@ -274,29 +272,17 @@ impl TextInput {
     }
 
     fn display_text(&self) -> String {
-        if self.masked {
-            std::iter::repeat_n(MASK_CHAR, self.content.chars().count()).collect()
-        } else {
-            self.content.clone()
-        }
+        if self.masked { std::iter::repeat_n(MASK_CHAR, self.content.chars().count()).collect() } else { self.content.clone() }
     }
 
     /// Content byte offset → display byte offset.
     fn to_display(&self, offset: usize) -> usize {
-        if self.masked {
-            masked_to_display(&self.content, offset)
-        } else {
-            offset
-        }
+        if self.masked { masked_to_display(&self.content, offset) } else { offset }
     }
 
     /// Display byte offset → content byte offset.
-    fn from_display(&self, offset: usize) -> usize {
-        if self.masked {
-            masked_from_display(&self.content, offset)
-        } else {
-            offset.min(self.content.len())
-        }
+    fn display_to_content(&self, offset: usize) -> usize {
+        if self.masked { masked_from_display(&self.content, offset) } else { offset.min(self.content.len()) }
     }
 
     fn previous_boundary(&self, offset: usize) -> usize {
@@ -341,12 +327,7 @@ impl TextInput {
     fn point_for_offset(&self, offset: usize) -> Option<Point<Pixels>> {
         let layout = self.layout.as_ref()?;
         let d = self.to_display(offset);
-        let line = layout
-            .lines
-            .iter()
-            .rev()
-            .find(|l| l.start <= d)
-            .or(layout.lines.first())?;
+        let line = layout.lines.iter().rev().find(|l| l.start <= d).or(layout.lines.first())?;
         let local = d.saturating_sub(line.start).min(line.line.len());
         let p = line.line.position_for_index(local, layout.line_height).unwrap_or(point(px(0.), px(0.)));
         Some(point(p.x, p.y + line.y))
@@ -359,14 +340,10 @@ impl TextInput {
             return 0;
         }
         let lh = layout.line_height;
-        let line = layout
-            .lines
-            .iter()
-            .find(|l| p.y < l.y + l.line.size(lh).height)
-            .unwrap_or(layout.lines.last().unwrap());
+        let line = layout.lines.iter().find(|l| p.y < l.y + l.line.size(lh).height).unwrap_or(layout.lines.last().unwrap());
         let local = point(p.x.max(px(0.)), (p.y - line.y).max(px(0.)));
         let ix = line.line.closest_index_for_position(local, lh).unwrap_or_else(|i| i);
-        self.from_display(line.start + ix.min(line.line.len()))
+        self.display_to_content(line.start + ix.min(line.line.len()))
     }
 
     fn index_for_mouse_position(&self, position: Point<Pixels>) -> usize {
@@ -384,11 +361,7 @@ impl TextInput {
         if y < px(0.) {
             return 0;
         }
-        let total = self
-            .layout
-            .as_ref()
-            .and_then(|l| l.lines.last().map(|last| last.y + last.line.size(lh).height))
-            .unwrap_or(px(0.));
+        let total = self.layout.as_ref().and_then(|l| l.lines.last().map(|last| last.y + last.line.size(lh).height)).unwrap_or(px(0.));
         if y > total {
             return self.content.len();
         }
@@ -716,11 +689,7 @@ impl EntityInputHandler for TextInput {
         if self.disabled {
             return;
         }
-        let range = range_utf16
-            .as_ref()
-            .map(|r| self.range_from_utf16(r))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+        let range = range_utf16.as_ref().map(|r| self.range_from_utf16(r)).or(self.marked_range.clone()).unwrap_or(self.selected_range.clone());
         let new_text = self.sanitize(new_text);
         self.push_undo();
         self.content.replace_range(range.clone(), &new_text);
@@ -744,11 +713,7 @@ impl EntityInputHandler for TextInput {
         if self.disabled {
             return;
         }
-        let range = range_utf16
-            .as_ref()
-            .map(|r| self.range_from_utf16(r))
-            .or(self.marked_range.clone())
-            .unwrap_or(self.selected_range.clone());
+        let range = range_utf16.as_ref().map(|r| self.range_from_utf16(r)).or(self.marked_range.clone()).unwrap_or(self.selected_range.clone());
         self.content.replace_range(range.clone(), new_text);
         self.marked_range = (!new_text.is_empty()).then(|| range.start..range.start + new_text.len());
         self.selected_range = new_selected_range_utf16
@@ -803,11 +768,7 @@ fn runs_for(text: &str, style: &gpui::TextStyle, color: Hsla, marked: Option<Ran
     match marked {
         Some(m) if m.end <= text.len() => [
             TextRun { len: m.start, ..run.clone() },
-            TextRun {
-                len: m.end - m.start,
-                underline: Some(UnderlineStyle { color: Some(color), thickness: px(1.), wavy: false }),
-                ..run.clone()
-            },
+            TextRun { len: m.end - m.start, underline: Some(UnderlineStyle { color: Some(color), thickness: px(1.), wavy: false }), ..run.clone() },
             TextRun { len: text.len() - m.end, ..run },
         ]
         .into_iter()
@@ -818,10 +779,7 @@ fn runs_for(text: &str, style: &gpui::TextStyle, color: Hsla, marked: Option<Ran
 }
 
 fn shape(text: &str, runs: &[TextRun], font_size: Pixels, wrap: Option<Pixels>, line_height: Pixels, window: &mut Window) -> Vec<LaidOutLine> {
-    let shaped = window
-        .text_system()
-        .shape_text(SharedString::from(text.to_string()), font_size, runs, wrap, None)
-        .unwrap_or_default();
+    let shaped = window.text_system().shape_text(SharedString::from(text.to_string()), font_size, runs, wrap, None).unwrap_or_default();
     let mut out = Vec::new();
     let mut start = 0;
     let mut y = px(0.);
@@ -864,10 +822,7 @@ impl Element for TextElement {
         let line_height = window.line_height();
         // A growing flex item rather than `width: 100%`: percentage widths can
         // resolve to (almost) zero depending on the parent, hiding the text.
-        let mut style = Style::default();
-        style.flex_grow = 1.;
-        style.flex_shrink = 1.;
-        style.flex_basis = px(0.).into();
+        let mut style = Style { flex_grow: 1., flex_shrink: 1., flex_basis: px(0.).into(), ..Default::default() };
         style.min_size.width = px(0.).into();
         if !input.multiline {
             style.size.height = line_height.into();
@@ -951,10 +906,7 @@ impl Element for TextElement {
         let mut selections = Vec::new();
         let mut cursor = None;
         if selected.is_empty() || is_placeholder {
-            cursor = Some(fill(
-                Bounds::new(point(origin.x + cursor_pos.x, origin.y + cursor_pos.y), size(px(1.5), line_height)),
-                self.cursor_color,
-            ));
+            cursor = Some(fill(Bounds::new(point(origin.x + cursor_pos.x, origin.y + cursor_pos.y), size(px(1.5), line_height)), self.cursor_color));
         } else {
             let (a, b) = (input.to_display(selected.start), input.to_display(selected.end));
             for line in &lines {
@@ -970,11 +922,7 @@ impl Element for TextElement {
                         continue;
                     }
                     let y = line.y + line_height * row as f32;
-                    let x1 = if a > rs {
-                        line.line.position_for_index(a - line.start, line_height).map(|p| p.x).unwrap_or_default()
-                    } else {
-                        px(0.)
-                    };
+                    let x1 = if a > rs { line.line.position_for_index(a - line.start, line_height).map(|p| p.x).unwrap_or_default() } else { px(0.) };
                     let x2 = if b < re && b <= line_end {
                         line.line.position_for_index(b - line.start, line_height).map(|p| p.x).unwrap_or_default()
                     } else if input.multiline {
@@ -1016,10 +964,11 @@ impl Element for TextElement {
             for line in &prepaint.lines {
                 line.line.paint(point(origin.x, origin.y + line.y), lh, TextAlign::Left, None, window, cx).ok();
             }
-            if focus_handle.is_focused(window) && !disabled {
-                if let Some(cursor) = prepaint.cursor.take() {
-                    window.paint_quad(cursor);
-                }
+            if focus_handle.is_focused(window)
+                && !disabled
+                && let Some(cursor) = prepaint.cursor.take()
+            {
+                window.paint_quad(cursor);
             }
         });
         let lines = std::mem::take(&mut prepaint.lines);
@@ -1121,20 +1070,11 @@ fn masked_from_display(content: &str, offset: usize) -> usize {
 }
 
 fn prev_word(content: &str, offset: usize) -> usize {
-    content
-        .split_word_bound_indices()
-        .rev()
-        .find(|(i, w)| *i < offset && !w.trim().is_empty())
-        .map(|(i, _)| i)
-        .unwrap_or(0)
+    content.split_word_bound_indices().rev().find(|(i, w)| *i < offset && !w.trim().is_empty()).map(|(i, _)| i).unwrap_or(0)
 }
 
 fn next_word(content: &str, offset: usize) -> usize {
-    content
-        .split_word_bound_indices()
-        .find(|(i, w)| i + w.len() > offset && !w.trim().is_empty())
-        .map(|(i, w)| i + w.len())
-        .unwrap_or(content.len())
+    content.split_word_bound_indices().find(|(i, w)| i + w.len() > offset && !w.trim().is_empty()).map(|(i, w)| i + w.len()).unwrap_or(content.len())
 }
 
 #[cfg(test)]

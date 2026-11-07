@@ -9,13 +9,13 @@ use crate::{
     ui,
 };
 use discuit_api::Community;
-use gpui::{deferred, div, prelude::*, px, Context, Entity, FontWeight, SharedString, Subscription, Task, Window};
+use gpui::{Context, Entity, FontWeight, SharedString, Subscription, Task, Window, deferred, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 use std::time::Duration;
 
 #[derive(Clone)]
 enum Hit {
-    Community(Community),
+    Community(Box<Community>),
     User(String),
 }
 
@@ -70,7 +70,7 @@ impl QuickJump {
                 if this.generation != generation {
                     return;
                 }
-                let mut hits: Vec<Hit> = result.unwrap_or_default().into_iter().map(Hit::Community).collect();
+                let mut hits: Vec<Hit> = result.unwrap_or_default().into_iter().map(|c| Hit::Community(Box::new(c))).collect();
                 hits.push(Hit::User(user));
                 this.hits = hits;
                 this.selected = 0;
@@ -152,7 +152,13 @@ impl Render for QuickJump {
                         (ui::avatar(pic.as_deref(), &c.name, px(22.), cx), c.name.clone().into(), ui::plural(c.no_members, "member").into())
                     }
                     Hit::User(u) => (
-                        div().size(px(22.)).flex().items_center().justify_center().child(icons::sized(Icon::User, px(16.), t.colors.text_light)).into_any_element(),
+                        div()
+                            .size(px(22.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(icons::sized(Icon::User, px(16.), t.colors.text_light))
+                            .into_any_element(),
                         format!("@{u}").into(),
                         "Open profile".into(),
                     ),

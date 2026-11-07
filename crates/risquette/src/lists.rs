@@ -9,7 +9,7 @@ use crate::{
     ui,
 };
 use discuit_api::{List, ListPatch, NewList};
-use gpui::{div, prelude::*, px, Context, FontWeight, SharedString, Task, Window};
+use gpui::{Context, FontWeight, SharedString, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct ListsView {
@@ -24,11 +24,15 @@ pub struct ListsView {
 impl ListsView {
     pub fn new(username: String, cx: &mut Context<Self>) -> Self {
         let name = username.clone();
-        let owner_task = api_view(cx, move |c| c.user(&name), |this: &mut Self, r, _| {
-            if let Ok(u) = r {
-                this.owner = Some(u);
-            }
-        });
+        let owner_task = api_view(
+            cx,
+            move |c| c.user(&name),
+            |this: &mut Self, r, _| {
+                if let Ok(u) = r {
+                    this.owner = Some(u);
+                }
+            },
+        );
         let mut this = Self { username, owner: None, lists: None, error: None, _task: None, _owner_task: Some(owner_task) };
         this.refresh(cx);
         this
@@ -36,10 +40,14 @@ impl ListsView {
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let name = self.username.clone();
-        self._task = Some(api_view(cx, move |c| c.user_lists(&name, None, None), |this, r, _| match r {
-            Ok(l) => this.lists = Some(l),
-            Err(e) => this.error = Some(e.user_message().into()),
-        }));
+        self._task = Some(api_view(
+            cx,
+            move |c| c.user_lists(&name, None, None),
+            |this, r, _| match r {
+                Ok(l) => this.lists = Some(l),
+                Err(e) => this.error = Some(e.user_message().into()),
+            },
+        ));
     }
 
     fn is_own(&self, cx: &Context<Self>) -> bool {
@@ -55,16 +63,23 @@ impl ListsView {
                 return Task::ready(Err("Give the list a name.".into()));
             }
             let slug: String = display.chars().map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '_' }).collect();
-            let list = NewList { name: slug, display_name: Some(display), description: Some(v.texts[1].trim().to_string()).filter(|d| !d.is_empty()), public: v.checks[0] };
+            let list = NewList {
+                name: slug,
+                display_name: Some(display),
+                description: Some(v.texts[1].trim().to_string()).filter(|d| !d.is_empty()),
+                public: v.checks[0],
+            };
             let username = username.clone();
             let entity = entity.clone();
             let task = api_task(cx, move |c| c.create_list(&username, &list));
             cx.spawn(async move |cx| {
                 let lists = task.await?;
-                entity.update(cx, |this, cx| {
-                    this.lists = Some(lists);
-                    cx.notify();
-                }).ok();
+                entity
+                    .update(cx, |this, cx| {
+                        this.lists = Some(lists);
+                        cx.notify();
+                    })
+                    .ok();
                 Ok(())
             })
         })
@@ -83,19 +98,26 @@ impl ListsView {
             MenuItem::new("Edit", move |_, cx| {
                 let (id, entity) = (l.id, e1.clone());
                 FormSpec::new("Edit list", "Save", move |v, cx| {
-                    let patch = ListPatch { display_name: Some(v.texts[0].trim().to_string()), description: Some(v.texts[1].trim().to_string()), public: Some(v.checks[0]), name: None };
+                    let patch = ListPatch {
+                        display_name: Some(v.texts[0].trim().to_string()),
+                        description: Some(v.texts[1].trim().to_string()),
+                        public: Some(v.checks[0]),
+                        name: None,
+                    };
                     let entity = entity.clone();
                     let task = api_task(cx, move |c| c.update_list(id, &patch));
                     cx.spawn(async move |cx| {
                         let updated = task.await?;
-                        entity.update(cx, |this, cx| {
-                            if let Some(lists) = this.lists.as_mut() {
-                                if let Some(x) = lists.iter_mut().find(|x| x.id == updated.id) {
+                        entity
+                            .update(cx, |this, cx| {
+                                if let Some(lists) = this.lists.as_mut()
+                                    && let Some(x) = lists.iter_mut().find(|x| x.id == updated.id)
+                                {
                                     *x = updated;
                                 }
-                            }
-                            cx.notify();
-                        }).ok();
+                                cx.notify();
+                            })
+                            .ok();
                         Ok(())
                     })
                 })
@@ -107,28 +129,50 @@ impl ListsView {
             MenuItem::new("Clear all items", {
                 let id = l2.id;
                 move |_, cx| {
-                    modals::confirm("Clear list?", "Every saved item in this list will be removed.", "Clear", move |cx| {
-                        api(cx, move |c| c.clear_list(id), |r, cx| nav::toast(r.map(|_| "List cleared".to_string()).unwrap_or_else(|e| e.user_message()), cx));
-                    }, cx);
+                    modals::confirm(
+                        "Clear list?",
+                        "Every saved item in this list will be removed.",
+                        "Clear",
+                        move |cx| {
+                            api(
+                                cx,
+                                move |c| c.clear_list(id),
+                                |r, cx| nav::toast(r.map(|_| "List cleared".to_string()).unwrap_or_else(|e| e.user_message()), cx),
+                            );
+                        },
+                        cx,
+                    );
                 }
             })
             .danger(),
             MenuItem::new("Delete list", move |_, cx| {
                 let (id, entity) = (l2.id, entity.clone());
-                modals::confirm("Delete list?", "The list and its items will be deleted.", "Delete", move |cx| {
-                    let entity = entity.clone();
-                    api(cx, move |c| c.delete_list(id), move |r, cx| match r {
-                        Ok(_) => {
-                            entity.update(cx, |this, cx| {
-                                if let Some(lists) = this.lists.as_mut() {
-                                    lists.retain(|x| x.id != id);
+                modals::confirm(
+                    "Delete list?",
+                    "The list and its items will be deleted.",
+                    "Delete",
+                    move |cx| {
+                        let entity = entity.clone();
+                        api(
+                            cx,
+                            move |c| c.delete_list(id),
+                            move |r, cx| match r {
+                                Ok(_) => {
+                                    entity
+                                        .update(cx, |this, cx| {
+                                            if let Some(lists) = this.lists.as_mut() {
+                                                lists.retain(|x| x.id != id);
+                                            }
+                                            cx.notify();
+                                        })
+                                        .ok();
                                 }
-                                cx.notify();
-                            }).ok();
-                        }
-                        Err(e) => nav::toast(e.user_message(), cx),
-                    });
-                }, cx);
+                                Err(e) => nav::toast(e.user_message(), cx),
+                            },
+                        );
+                    },
+                    cx,
+                );
             })
             .danger(),
         ]
@@ -177,7 +221,9 @@ impl Render for ListsView {
         let body: gpui::AnyElement = match &self.lists {
             None if self.error.is_some() => ui::notice(self.error.clone().unwrap(), cx).into_any_element(),
             None => ui::notice("Loading…", cx).into_any_element(),
-            Some(l) if l.is_empty() => ui::notice(if own { "No lists yet. Save posts and comments from their menu." } else { "No public lists." }, cx).into_any_element(),
+            Some(l) if l.is_empty() => {
+                ui::notice(if own { "No lists yet. Save posts and comments from their menu." } else { "No public lists." }, cx).into_any_element()
+            }
             Some(lists) => {
                 let mut grid = div().grid().grid_cols(cols).gap(px(10.));
                 for (ix, l) in lists.clone().into_iter().enumerate() {
@@ -247,17 +293,7 @@ impl Render for ListsView {
             }
         };
         div().id("lists").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div()
-                .w_full()
-                .max_w(px(crate::layout::PAGE_MAX))
-                .flex_none()
-                .px(px(16.))
-                .py(px(12.))
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .child(header)
-                .child(body),
+            div().w_full().max_w(px(crate::layout::PAGE_MAX)).flex_none().px(px(16.)).py(px(12.)).flex().flex_col().gap(px(12.)).child(header).child(body),
         )
     }
 }

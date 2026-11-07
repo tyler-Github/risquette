@@ -64,20 +64,12 @@ impl Session {
 
     /// Whether the user moderates the community (by id). Admins count as mods.
     pub fn is_mod_of(&self, community_id: &str) -> bool {
-        self.is_admin()
-            || self
-                .user
-                .as_ref()
-                .and_then(|u| u.modding_list.as_ref())
-                .is_some_and(|l| l.iter().any(|c| c.id == community_id))
+        self.is_admin() || self.user.as_ref().and_then(|u| u.modding_list.as_ref()).is_some_and(|l| l.iter().any(|c| c.id == community_id))
     }
 
     /// Whether the user is actually on the community's mod list (admins not implied).
     pub fn is_mod_of_strict(&self, community_id: &str) -> bool {
-        self.user
-            .as_ref()
-            .and_then(|u| u.modding_list.as_ref())
-            .is_some_and(|l| l.iter().any(|c| c.id == community_id))
+        self.user.as_ref().and_then(|u| u.modding_list.as_ref()).is_some_and(|l| l.iter().any(|c| c.id == community_id))
     }
 
     /// Joined communities when logged in, otherwise the default set.

@@ -96,10 +96,7 @@ pub fn api_view<V: 'static, T: Send + 'static>(
 }
 
 /// A background API call as a task resolving to a user-facing error message.
-pub fn api_task<T: Send + 'static>(
-    cx: &App,
-    call: impl FnOnce(&Client) -> discuit_api::Result<T> + Send + 'static,
-) -> Task<Result<T, String>> {
+pub fn api_task<T: Send + 'static>(cx: &App, call: impl FnOnce(&Client) -> discuit_api::Result<T> + Send + 'static) -> Task<Result<T, String>> {
     let client = AppState::client(cx);
     cx.background_executor().spawn(async move { call(&client).map_err(|e| e.user_message()) })
 }

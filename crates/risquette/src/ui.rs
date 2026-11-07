@@ -5,19 +5,13 @@ use crate::{
     state::ImageCache,
 };
 use chrono::{DateTime, Utc};
-use gpui::{
-    div, img, prelude::*, px, AnyElement, App, ElementId, FontWeight, ObjectFit, SharedString,
-};
+use gpui::{AnyElement, App, ElementId, FontWeight, ObjectFit, SharedString, div, img, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 /// `.card`: background, radius and the 1px ring Discuit uses as a border.
 pub fn card(cx: &App) -> gpui::Div {
     let t = cx.theme();
-    div()
-        .bg(t.colors.card)
-        .rounded(t.metrics.radius)
-        .border_1()
-        .border_color(t.colors.card_ring)
+    div().bg(t.colors.card).rounded(t.metrics.radius).border_1().border_color(t.colors.card_ring)
 }
 
 fn button_base(

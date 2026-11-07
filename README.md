@@ -5,6 +5,7 @@
 
 <p align="center">
   <a href="https://github.com/tyler-Github/risquette/releases/latest"><img alt="Download" src="https://img.shields.io/badge/Download-Windows-6b02f2?style=for-the-badge&logo=windows11&logoColor=white"></a>
+  <a href="https://risquette.xnoid.studio"><img alt="Website" src="https://img.shields.io/badge/Website-risquette.xnoid.studio-18102c?style=for-the-badge&logoColor=white"></a>
 </p>
 
 <p align="center">
