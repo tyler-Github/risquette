@@ -27,6 +27,7 @@ Closes #
 
 ## Checklist
 
+- [ ] Added a line to `CHANGELOG.md` under `## [Unreleased]` describing the change for people using the app (or the change isn't user-visible and can take the `no-changelog` label)
 - [ ] Automated tests don't send write requests (POST/PUT/PATCH/DELETE) to a real Discuit instance. They use the local test server instead.
 - [ ] No cookies, passwords or tokens in code, logs, tests or screenshots
 - [ ] Docs updated if behaviour changed (`README.md`, `docs/`)

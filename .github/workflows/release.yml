@@ -11,6 +11,10 @@
 # Tags with a pre-release suffix (v0.3.0-beta.1) become pre-releases and are
 # offered only on the beta channel.
 #
+# Release notes come from the tag's section in CHANGELOG.md
+# (`python scripts/changelog.py prepare <version>` creates it). The app shows
+# them in its update dialog, so the job stops early if they're missing.
+#
 # Settings (optional):
 #   Variable RISQUETTE_UPDATE_URL  a different update server to bake into the app
 #                                  (default: the official https://risquette.xnoid.studio)
@@ -57,6 +61,16 @@ jobs:
           $version = ((cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq "risquette").version
           if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match Cargo version $version" }
 
+      - name: Release notes from CHANGELOG.md
+        shell: pwsh
+        run: |
+          python scripts/changelog.py check
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/release" | Out-Null
+          python scripts/changelog.py notes $env:GITHUB_REF_NAME --out "$env:RUNNER_TEMP/release/notes.md"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Content "$env:RUNNER_TEMP/release/notes.md"
+
       - name: Test
         run: cargo test --workspace --locked
 
@@ -85,7 +99,9 @@ jobs:
         with:
           name: Risquette ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
+          # Notes from CHANGELOG.md. GitHub's automatic notes stay off: their
+          # @mentions would show as Discuit profile links in the app.
+          body_path: ${{ runner.temp }}/release/notes.md
           files: |
             dist/RisquetteSetup-*.exe
             dist/RisquetteSetup-*.exe.sha256

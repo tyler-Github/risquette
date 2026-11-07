@@ -1,0 +1,48 @@
+# Asks for a CHANGELOG.md entry when a pull request changes the app.
+#
+# The changelog is where release notes come from, and users read them in the
+# app's update dialog, so changes that people will notice should be listed
+# under "## [Unreleased]". Changes nobody will notice (refactors, tests, CI)
+# can skip this check with the `no-changelog` label. Dependabot is skipped
+# automatically.
+
+name: Changelog
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changelog-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  entry:
+    name: Changelog entry
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login != 'dependabot[bot]' && !contains(github.event.pull_request.labels.*.name, 'no-changelog')
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check for an entry under Unreleased
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$(git diff --name-only "$BASE_SHA"...HEAD)"
+          echo "Changed files:"; echo "$changed" | sed 's/^/  /'
+          # App code, dependencies and bundled assets affect what users get.
+          if ! echo "$changed" | grep -qE '^(crates/|assets/|Cargo\.toml$|Cargo\.lock$)'; then
+            echo "No app changes, so no changelog entry is needed."
+            exit 0
+          fi
+          if echo "$changed" | grep -qx 'CHANGELOG.md'; then
+            echo "CHANGELOG.md was updated."
+            exit 0
+          fi
+          echo "::error file=CHANGELOG.md::This pull request changes the app but doesn't add a line to CHANGELOG.md. Describe the change under '## [Unreleased]' (in words a user would understand), or add the 'no-changelog' label if users won't notice it."
+          exit 1

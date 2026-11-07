@@ -12,7 +12,8 @@
 | `crates/risquette` | The desktop app. |
 | `crates/risquette-installer` | The installer, updater and uninstaller (`risquette-setup.exe`). |
 | `branding/` | Logo, banners, social preview and screenshots. |
-| `scripts/` | Packaging (`package.ps1`), image generation (`make_icon.py`, `make_branding.py`) and the docs link check (`check_docs.py`). |
+| `scripts/` | Packaging (`package.ps1`), release notes (`changelog.py`), image generation (`make_icon.py`, `make_branding.py`) and the docs link check (`check_docs.py`). |
+| `CHANGELOG.md` | User-facing changes per release; the source of release notes. |
 | `docs/` | These documents. |
 | `.github/` | CI and release workflows, issue and pull request templates, CODEOWNERS and Dependabot. |
 
@@ -78,8 +79,10 @@ Every pull request and push to `main` runs `.github/workflows/ci.yml`. All of th
 | Formatting | `cargo fmt --all --check` (style in `rustfmt.toml`) |
 | Clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
 | Tests | `cargo test --workspace --locked`, then a full build |
-| Docs and links | `python scripts/check_docs.py`: every local link and image in the Markdown exists |
+| Docs and links | `python scripts/check_docs.py` (every local link and image in the Markdown exists), plus `python scripts/changelog.py check` and the changelog script's tests |
 | Dependency audit | `cargo audit` against the RustSec advisory database |
+
+A separate **Changelog entry** check (`.github/workflows/changelog.yml`) asks for a `CHANGELOG.md` line when a pull request changes the app. See [Release notes](releasing.md#release-notes).
 
 Dependabot opens weekly pull requests for Cargo and GitHub Actions updates. GPUI, wry and windows are left alone because their versions must match. Third-party actions are pinned to exact commits.
 
