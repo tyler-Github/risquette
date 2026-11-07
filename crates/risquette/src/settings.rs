@@ -10,7 +10,7 @@ use crate::{
     ui,
 };
 use discuit_api::{MuteKind, Mutes, ProfileUpdate};
-use gpui::{div, prelude::*, px, Context, Entity, PathPromptOptions, SharedString, Task, Window};
+use gpui::{Context, Entity, PathPromptOptions, SharedString, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct SettingsView {
@@ -40,16 +40,15 @@ impl SettingsView {
         let stored = crate::storage::load();
         let current = current_instance(cx);
         let instance = cx.new(|cx| TextInput::new(cx).placeholder("discuit.example.com").with_text(current.trim_start_matches("https://").to_string()));
-        let update_server = cx.new(|cx| {
-            TextInput::new(cx)
-                .placeholder(crate::updater::DEFAULT_SERVER)
-                .with_text(stored.update_server.clone().unwrap_or_default())
-        });
+        let update_server =
+            cx.new(|cx| TextInput::new(cx).placeholder(crate::updater::DEFAULT_SERVER).with_text(stored.update_server.clone().unwrap_or_default()));
         let updater = crate::updater::Updater::entity(cx);
         let subs = vec![cx.observe(&updater, |_, _, cx| cx.notify()), cx.observe(&Session::entity(cx), |_, _, cx| cx.notify())];
         let user = Session::get(cx).user().cloned().unwrap_or_default();
         let profile = ProfileUpdate::from_user(&user);
-        let about = cx.new(|cx| TextInput::new(cx).multiline(4).placeholder("Tell people about yourself (markdown)").with_text(user.about_me.clone().unwrap_or_default()));
+        let about = cx.new(|cx| {
+            TextInput::new(cx).multiline(4).placeholder("Tell people about yourself (markdown)").with_text(user.about_me.clone().unwrap_or_default())
+        });
         let mut this = Self {
             profile,
             about,
@@ -68,11 +67,15 @@ impl SettingsView {
             _subs: subs,
         };
         if logged_in {
-            this._tasks.push(api_view(cx, |c| c.mutes(), |this, r, _| {
-                if let Ok(m) = r {
-                    this.mutes = Some(m);
-                }
-            }));
+            this._tasks.push(api_view(
+                cx,
+                |c| c.mutes(),
+                |this, r, _| {
+                    if let Ok(m) = r {
+                        this.mutes = Some(m);
+                    }
+                },
+            ));
         }
         this
     }
@@ -133,22 +136,27 @@ impl SettingsView {
         profile.about_me = (!about.trim().is_empty()).then_some(about);
         self.saving = true;
         self.status = None;
-        self._tasks.push(api_view(cx, move |c| c.update_profile(&profile), |this, r, cx| {
-            this.saving = false;
-            match r {
-                Ok(user) => {
-                    this.profile = ProfileUpdate::from_user(&user);
-                    Session::entity(cx).update(cx, |s, cx| s.set_user(user, cx));
-                    this.status = Some((true, "Saved.".into()));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.update_profile(&profile),
+            |this, r, cx| {
+                this.saving = false;
+                match r {
+                    Ok(user) => {
+                        this.profile = ProfileUpdate::from_user(&user);
+                        Session::entity(cx).update(cx, |s, cx| s.set_user(user, cx));
+                        this.status = Some((true, "Saved.".into()));
+                    }
+                    Err(e) => this.status = Some((false, e.user_message().into())),
                 }
-                Err(e) => this.status = Some((false, e.user_message().into())),
-            }
-        }));
+            },
+        ));
         cx.notify();
     }
 
     fn change_password(&mut self, cx: &mut Context<Self>) {
-        let (cur, new, rep) = (self.current_pw.read(cx).text().to_string(), self.new_pw.read(cx).text().to_string(), self.repeat_pw.read(cx).text().to_string());
+        let (cur, new, rep) =
+            (self.current_pw.read(cx).text().to_string(), self.new_pw.read(cx).text().to_string(), self.repeat_pw.read(cx).text().to_string());
         if new != rep {
             self.pw_status = Some((false, "New passwords don't match.".into()));
             cx.notify();
@@ -159,20 +167,25 @@ impl SettingsView {
             cx.notify();
             return;
         }
-        self._tasks.push(api_view(cx, move |c| c.change_password(&cur, &new, &rep), |this, r, cx| match r {
-            Ok(_) => {
-                this.pw_status = Some((true, "Password changed.".into()));
-                for i in [&this.current_pw, &this.new_pw, &this.repeat_pw] {
-                    i.update(cx, |i, cx| i.clear(cx));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.change_password(&cur, &new, &rep),
+            |this, r, cx| match r {
+                Ok(_) => {
+                    this.pw_status = Some((true, "Password changed.".into()));
+                    for i in [&this.current_pw, &this.new_pw, &this.repeat_pw] {
+                        i.update(cx, |i, cx| i.clear(cx));
+                    }
                 }
-            }
-            Err(e) => this.pw_status = Some((false, e.user_message().into())),
-        }));
+                Err(e) => this.pw_status = Some((false, e.user_message().into())),
+            },
+        ));
     }
 
     fn upload_pro_pic(&mut self, cx: &mut Context<Self>) {
         let Some(username) = Session::get(cx).username().map(str::to_string) else { return };
-        let paths = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("Choose a profile picture".into()) });
+        let paths =
+            cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some("Choose a profile picture".into()) });
         self._tasks.push(cx.spawn(async move |_, cx| {
             let Ok(Ok(Some(paths))) = paths.await else { return };
             let Some(path) = paths.into_iter().next() else { return };
@@ -198,30 +211,42 @@ impl SettingsView {
 
     fn remove_pro_pic(&mut self, cx: &mut Context<Self>) {
         let Some(username) = Session::get(cx).username().map(str::to_string) else { return };
-        api(cx, move |c| c.delete_user_pro_pic(&username), |r, cx| match r {
-            Ok(user) => Session::entity(cx).update(cx, |s, cx| s.set_user(user, cx)),
-            Err(e) => nav::toast(e.user_message(), cx),
-        });
+        api(
+            cx,
+            move |c| c.delete_user_pro_pic(&username),
+            |r, cx| match r {
+                Ok(user) => Session::entity(cx).update(cx, |s, cx| s.set_user(user, cx)),
+                Err(e) => nav::toast(e.user_message(), cx),
+            },
+        );
     }
 
     fn unmute(&mut self, mute_id: String, cx: &mut Context<Self>) {
-        self._tasks.push(api_view(cx, move |c| c.unmute(&mute_id).and_then(|_| c.mutes()), |this, r, cx| match r {
-            Ok(m) => {
-                this.mutes = Some(m.clone());
-                Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-            }
-            Err(e) => nav::toast(e.user_message(), cx),
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.unmute(&mute_id).and_then(|_| c.mutes()),
+            |this, r, cx| match r {
+                Ok(m) => {
+                    this.mutes = Some(m.clone());
+                    Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                }
+                Err(e) => nav::toast(e.user_message(), cx),
+            },
+        ));
     }
 
     fn clear_mutes(&mut self, kind: MuteKind, cx: &mut Context<Self>) {
-        self._tasks.push(api_view(cx, move |c| c.clear_mutes(kind).and_then(|_| c.mutes()), |this, r, cx| match r {
-            Ok(m) => {
-                this.mutes = Some(m.clone());
-                Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-            }
-            Err(e) => nav::toast(e.user_message(), cx),
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.clear_mutes(kind).and_then(|_| c.mutes()),
+            |this, r, cx| match r {
+                Ok(m) => {
+                    this.mutes = Some(m.clone());
+                    Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                }
+                Err(e) => nav::toast(e.user_message(), cx),
+            },
+        ));
     }
 
     /// Client settings that apply whatever account or instance: (instance, app, updates).
@@ -262,7 +287,12 @@ impl SettingsView {
                             .flex()
                             .flex_col()
                             .min_w_0()
-                            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).text_color(t.colors.text).child(current.trim_start_matches("https://").to_string()))
+                            .child(
+                                div()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(t.colors.text)
+                                    .child(current.trim_start_matches("https://").to_string()),
+                            )
                             .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(match (session.initial(), session.user()) {
                                 (Some(i), Some(u)) => format!("{} members · logged in as @{}", ui::compact(i.no_users), u.username),
                                 (Some(i), None) => format!("{} members · not logged in", ui::compact(i.no_users)),
@@ -273,14 +303,14 @@ impl SettingsView {
             .child(setting(
                 "Connect to another instance",
                 "Risquette works with any Discuit server. Logins are kept separately for each instance.",
-                div()
-                    .flex()
-                    .gap(px(8.))
-                    .child(div().flex_1().min_w_0().child(self.instance.clone()))
-                    .child(ui::disabled(ui::button_main("s-connect", if self.probing { "Checking…" } else { "Connect" }, cx), self.probing).on_click(cx.listener(|this, _, _, cx| {
-                        let text = this.instance.read(cx).text().to_string();
-                        this.connect_instance(text, cx);
-                    }))),
+                div().flex().gap(px(8.)).child(div().flex_1().min_w_0().child(self.instance.clone())).child(
+                    ui::disabled(ui::button_main("s-connect", if self.probing { "Checking…" } else { "Connect" }, cx), self.probing).on_click(cx.listener(
+                        |this, _, _, cx| {
+                            let text = this.instance.read(cx).text().to_string();
+                            this.connect_instance(text, cx);
+                        },
+                    )),
+                ),
                 cx,
             ))
             .children(status_line(&self.instance_status))
@@ -320,13 +350,12 @@ impl SettingsView {
         let app_card = section("App", cx)
             .child(setting("Theme", "Follow Windows, or always use light or dark (Ctrl+Shift+L toggles).", theme, cx))
             .child(setting("Open on launch", "Which feed Risquette shows when it starts.", startup, cx))
-            .child(
-                ui::checkbox("s-videos", stored.videos_in_browser, "Open videos in my web browser instead of the built-in player", cx).on_click(cx.listener(|_, _, _, cx| {
+            .child(ui::checkbox("s-videos", stored.videos_in_browser, "Open videos in my web browser instead of the built-in player", cx).on_click(
+                cx.listener(|_, _, _, cx| {
                     crate::storage::update(|s| s.videos_in_browser = !s.videos_in_browser);
                     cx.notify();
-                })),
-            )
-            ;
+                }),
+            ));
 
         // --- Updates --------------------------------------------------------
         let status = Updater::entity(cx).read(cx).status.clone();
@@ -335,7 +364,9 @@ impl SettingsView {
             Status::Checking => ("Checking…".into(), t.colors.text_light),
             Status::UpToDate => ("You're on the newest version.".into(), t.colors.green),
             Status::Available(r) => (format!("Version {} is available.", r.version), t.colors.brand),
-            Status::Downloading { done, total, .. } => (format!("Downloading… {} of {}", updater::human_size(*done), updater::human_size(*total)), t.colors.brand),
+            Status::Downloading { done, total, .. } => {
+                (format!("Downloading… {} of {}", updater::human_size(*done), updater::human_size(*total)), t.colors.brand)
+            }
             Status::Ready { release, .. } => (format!("Version {} is ready to install.", release.version), t.colors.green),
             Status::Failed(e) => (e.to_string(), t.colors.red),
             Status::NotConfigured => ("No update server is configured for this build.".into(), t.colors.text_light),
@@ -363,7 +394,12 @@ impl SettingsView {
                             .flex_col()
                             .flex_1()
                             .min_w_0()
-                            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).text_color(t.colors.text).child(format!("Risquette {}", updater::CURRENT_VERSION)))
+                            .child(
+                                div()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(t.colors.text)
+                                    .child(format!("Risquette {}", updater::CURRENT_VERSION)),
+                            )
                             .child(div().text_size(t.fs.s).text_color(color).child(line)),
                     )
                     .child(if has_offer {
@@ -372,12 +408,10 @@ impl SettingsView {
                         ui::button_with_icon("s-upd-check", Icon::RefreshCw, "Check now", cx).on_click(|_, _, cx| updater::open_dialog(cx))
                     }),
             )
-            .child(
-                ui::checkbox("s-upd-auto", !stored.auto_update_disabled, "Check for updates automatically", cx).on_click(cx.listener(|_, _, _, cx| {
-                    crate::storage::update(|s| s.auto_update_disabled = !s.auto_update_disabled);
-                    cx.notify();
-                })),
-            )
+            .child(ui::checkbox("s-upd-auto", !stored.auto_update_disabled, "Check for updates automatically", cx).on_click(cx.listener(|_, _, _, cx| {
+                crate::storage::update(|s| s.auto_update_disabled = !s.auto_update_disabled);
+                cx.notify();
+            })))
             .child(setting("Channel", "Beta builds get new features first and may be rough around the edges.", channel, cx))
             .child(setting(
                 "Update server",
@@ -482,53 +516,65 @@ impl Render for SettingsView {
 
         let profile = section("Profile", cx)
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(14.))
-                    .child(ui::avatar(pic.as_deref(), &user.username, px(64.), cx))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.))
-                            .child(ui::button_with_icon("s-upload", Icon::Upload, "Upload picture", cx).on_click(cx.listener(|this, _, _, cx| this.upload_pro_pic(cx))))
-                            .when(user.pro_pic.is_some(), |d| d.child(ui::button("s-rmpic", "Remove", cx).on_click(cx.listener(|this, _, _, cx| this.remove_pro_pic(cx))))),
-                    ),
+                div().flex().items_center().gap(px(14.)).child(ui::avatar(pic.as_deref(), &user.username, px(64.), cx)).child(
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .child(
+                            ui::button_with_icon("s-upload", Icon::Upload, "Upload picture", cx)
+                                .on_click(cx.listener(|this, _, _, cx| this.upload_pro_pic(cx))),
+                        )
+                        .when(user.pro_pic.is_some(), |d| {
+                            d.child(ui::button("s-rmpic", "Remove", cx).on_click(cx.listener(|this, _, _, cx| this.remove_pro_pic(cx))))
+                        }),
+                ),
             )
             .child(div().flex().flex_col().gap(px(6.)).child(ui::field_label("About me", cx)).child(self.about.clone()))
             .when_some(user.email.clone(), |d, e| d.child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!("Email: {e}"))));
 
         let prefs = section("Preferences", cx)
-            .child(ui::checkbox("s-home", p.home_feed != "all", "Home feed shows only joined communities", cx).on_click(cx.listener(|this, _, _, cx| {
-                this.toggle(|p| p.home_feed = if p.home_feed == "all" { "subscriptions".into() } else { "all".into() }, cx)
-            })))
-            .child(ui::checkbox("s-upn", !p.upvote_notifications_off, "Notify me about upvotes", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.upvote_notifications_off = !p.upvote_notifications_off, cx))))
-            .child(ui::checkbox("s-rpn", !p.reply_notifications_off, "Notify me about replies", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.reply_notifications_off = !p.reply_notifications_off, cx))))
-            .child(ui::checkbox("s-sort", p.remember_feed_sort, "Remember feed sort", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.remember_feed_sort = !p.remember_feed_sort, cx))))
-            .child(ui::checkbox("s-embeds", p.embeds_off, "Disable embeds", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.embeds_off = !p.embeds_off, cx))))
-            .child(ui::checkbox("s-pics", p.hide_user_profile_pictures, "Hide user profile pictures", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.hide_user_profile_pictures = !p.hide_user_profile_pictures, cx))))
-            .child(ui::checkbox("s-alt", p.require_alt_text, "Require alt text on my images", cx).on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.require_alt_text = !p.require_alt_text, cx))))
+            .child(ui::checkbox("s-home", p.home_feed != "all", "Home feed shows only joined communities", cx).on_click(
+                cx.listener(|this, _, _, cx| this.toggle(|p| p.home_feed = if p.home_feed == "all" { "subscriptions".into() } else { "all".into() }, cx)),
+            ))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().children(status(&self.status)))
-                    .child(ui::disabled(ui::button_main("s-save", if self.saving { "Saving…" } else { "Save profile & preferences" }, cx), self.saving).on_click(cx.listener(|this, _, _, cx| this.save(cx)))),
+                ui::checkbox("s-upn", !p.upvote_notifications_off, "Notify me about upvotes", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.upvote_notifications_off = !p.upvote_notifications_off, cx))),
+            )
+            .child(
+                ui::checkbox("s-rpn", !p.reply_notifications_off, "Notify me about replies", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.reply_notifications_off = !p.reply_notifications_off, cx))),
+            )
+            .child(
+                ui::checkbox("s-sort", p.remember_feed_sort, "Remember feed sort", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.remember_feed_sort = !p.remember_feed_sort, cx))),
+            )
+            .child(
+                ui::checkbox("s-embeds", p.embeds_off, "Disable embeds", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.embeds_off = !p.embeds_off, cx))),
+            )
+            .child(
+                ui::checkbox("s-pics", p.hide_user_profile_pictures, "Hide user profile pictures", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.hide_user_profile_pictures = !p.hide_user_profile_pictures, cx))),
+            )
+            .child(
+                ui::checkbox("s-alt", p.require_alt_text, "Require alt text on my images", cx)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle(|p| p.require_alt_text = !p.require_alt_text, cx))),
+            )
+            .child(
+                div().flex().items_center().justify_between().child(div().children(status(&self.status))).child(
+                    ui::disabled(ui::button_main("s-save", if self.saving { "Saving…" } else { "Save profile & preferences" }, cx), self.saving)
+                        .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
+                ),
             );
 
-        let password = section("Change password", cx)
-            .child(self.current_pw.clone())
-            .child(self.new_pw.clone())
-            .child(self.repeat_pw.clone())
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(div().children(status(&self.pw_status)))
-                    .child(ui::button("s-pw", "Change password", cx).on_click(cx.listener(|this, _, _, cx| this.change_password(cx)))),
-            );
+        let password = section("Change password", cx).child(self.current_pw.clone()).child(self.new_pw.clone()).child(self.repeat_pw.clone()).child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .child(div().children(status(&self.pw_status)))
+                .child(ui::button("s-pw", "Change password", cx).on_click(cx.listener(|this, _, _, cx| this.change_password(cx)))),
+        );
 
         let mut mutes = section("Muted", cx);
         match &self.mutes {
@@ -560,7 +606,10 @@ impl Render for SettingsView {
                         .flex()
                         .gap(px(8.))
                         .child(ui::button("s-clear-u", "Unmute all users", cx).on_click(cx.listener(|this, _, _, cx| this.clear_mutes(MuteKind::User, cx))))
-                        .child(ui::button("s-clear-c", "Unmute all communities", cx).on_click(cx.listener(|this, _, _, cx| this.clear_mutes(MuteKind::Community, cx)))),
+                        .child(
+                            ui::button("s-clear-c", "Unmute all communities", cx)
+                                .on_click(cx.listener(|this, _, _, cx| this.clear_mutes(MuteKind::Community, cx))),
+                        ),
                 );
             }
         }
@@ -603,8 +652,16 @@ impl Render for SettingsView {
             )
         } else {
             let signin = section("Account", cx)
-                .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child("Log in to edit your profile, notification preferences, password and mutes."))
-                .child(div().flex().gap(px(8.)).child(ui::button_main_with_icon("s-login", Icon::LogIn, "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx))).child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))));
+                .child(
+                    div().text_size(t.fs.s).text_color(t.colors.text_light).child("Log in to edit your profile, notification preferences, password and mutes."),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .child(ui::button_main_with_icon("s-login", Icon::LogIn, "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx)))
+                        .child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))),
+                );
             (
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(signin),
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(instance_card).child(updates_card),

@@ -3,7 +3,7 @@
 //! Colours mirror `:root` (light) and `html.theme-dark` (dark). Sizes follow
 //! the CSS where `1rem = 10px` (`--fs-base`).
 
-use gpui::{px, App, Global, Hsla, Pixels, Rgba};
+use gpui::{App, Global, Hsla, Pixels, Rgba, px};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Mode {
@@ -150,15 +150,7 @@ impl Theme {
         Theme {
             mode,
             colors,
-            fs: FontSizes {
-                xs: px(12.),
-                s: px(13.),
-                normal: px(14.),
-                l: px(15.),
-                xl: px(16.),
-                xxl: px(25.),
-                xxxl: px(28.),
-            },
+            fs: FontSizes { xs: px(12.), s: px(13.), normal: px(14.), l: px(15.), xl: px(16.), xxl: px(25.), xxxl: px(28.) },
             metrics: Metrics {
                 gap: px(15.),
                 radius: px(5.),

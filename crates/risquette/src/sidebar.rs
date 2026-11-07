@@ -11,10 +11,7 @@ use crate::{
     storage, ui,
 };
 use discuit_api::Community;
-use gpui::{
-    div, prelude::*, px, AnyElement, App, Context, ElementId, Entity, FontWeight, Hsla, SharedString,
-    Subscription, Window,
-};
+use gpui::{AnyElement, App, Context, ElementId, Entity, FontWeight, Hsla, SharedString, Subscription, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub const EXPANDED_WIDTH: f32 = 252.;
@@ -72,7 +69,15 @@ impl Sidebar {
         self.row(id, leading, label, active, badge, cx).on_click(move |_, _, cx| nav::go(target.clone(), cx)).into_any_element()
     }
 
-    fn row(&self, id: impl Into<ElementId>, leading: impl IntoElement, label: SharedString, active: bool, badge: Option<i64>, cx: &App) -> gpui::Stateful<gpui::Div> {
+    fn row(
+        &self,
+        id: impl Into<ElementId>,
+        leading: impl IntoElement,
+        label: SharedString,
+        active: bool,
+        badge: Option<i64>,
+        cx: &App,
+    ) -> gpui::Stateful<gpui::Div> {
         let t = cx.theme();
         let hover = t.colors.button;
         let collapsed = self.rail;
@@ -304,12 +309,16 @@ impl Render for Sidebar {
         if logged_in {
             primary = primary.child(self.nav_item("sb-home", Icon::House, "Home", Target::Home, None, cx));
         }
-        primary = primary
-            .child(self.nav_item("sb-all", Icon::Globe, "All", Target::All, None, cx))
-            .child(self.nav_item("sb-comms", Icon::Compass, "Explore communities", Target::Communities, None, cx));
+        primary = primary.child(self.nav_item("sb-all", Icon::Globe, "All", Target::All, None, cx)).child(self.nav_item(
+            "sb-comms",
+            Icon::Compass,
+            "Explore communities",
+            Target::Communities,
+            None,
+            cx,
+        ));
         if let Some(u) = &username {
-            primary = primary
-                .child(self.nav_item("sb-saved", Icon::Bookmark, "Saved", Target::Lists(u.clone()), None, cx));
+            primary = primary.child(self.nav_item("sb-saved", Icon::Bookmark, "Saved", Target::Lists(u.clone()), None, cx));
         }
         if is_admin {
             primary = primary.child(self.nav_item("sb-admin", Icon::ShieldCheck, "Admin", Target::Admin, None, cx));
@@ -328,7 +337,14 @@ impl Render for Sidebar {
         }
 
         let open = self.show_communities;
-        scroll = scroll.child(self.section_header("sb-h-comms", if logged_in { "JOINED" } else { "POPULAR" }, open, total, |s| s.show_communities = !s.show_communities, cx));
+        scroll = scroll.child(self.section_header(
+            "sb-h-comms",
+            if logged_in { "JOINED" } else { "POPULAR" },
+            open,
+            total,
+            |s| s.show_communities = !s.show_communities,
+            cx,
+        ));
         if open && !self.rail && self.show_filter {
             scroll = scroll.child(div().flex_none().px(px(2.)).pb(px(6.)).child(self.filter.clone()));
         }
@@ -362,8 +378,13 @@ impl Render for Sidebar {
             .border_b_1()
             .border_color(t.colors.separator)
             .child(
-                ui::icon_button("sb-toggle", if collapsed { Icon::Menu } else { Icon::PanelLeft }, if collapsed { "Expand sidebar" } else { "Collapse sidebar" }, cx)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_collapsed(cx))),
+                ui::icon_button(
+                    "sb-toggle",
+                    if collapsed { Icon::Menu } else { Icon::PanelLeft },
+                    if collapsed { "Expand sidebar" } else { "Collapse sidebar" },
+                    cx,
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_collapsed(cx))),
             )
             .when(!self.rail, |d| {
                 d.child(

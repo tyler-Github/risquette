@@ -57,13 +57,16 @@ pub fn toast(message: impl Into<SharedString>, cx: &mut App) {
     with_root(cx, move |root, cx| root.show_toast(message, cx));
 }
 
+/// What a menu entry does when chosen.
+pub type MenuAction = Rc<dyn Fn(&mut Window, &mut App)>;
+
 /// One entry of a context menu.
 #[derive(Clone)]
 pub struct MenuItem {
     pub label: SharedString,
     pub icon: Option<Icon>,
     pub danger: bool,
-    pub action: Rc<dyn Fn(&mut Window, &mut App)>,
+    pub action: MenuAction,
 }
 
 impl MenuItem {

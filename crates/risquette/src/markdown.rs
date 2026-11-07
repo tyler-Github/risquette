@@ -6,8 +6,8 @@
 
 use crate::nav;
 use gpui::{
-    div, prelude::*, px, AnyElement, App, ElementId, FontStyle, FontWeight, Global, HighlightStyle,
-    InteractiveText, SharedString, StrikethroughStyle, StyledText, UnderlineStyle,
+    AnyElement, App, ElementId, FontStyle, FontWeight, Global, HighlightStyle, InteractiveText, SharedString, StrikethroughStyle, StyledText, UnderlineStyle,
+    div, prelude::*, px,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use risquette_theme::ActiveTheme;
@@ -110,13 +110,16 @@ fn parse(src: &str) -> Vec<Block> {
     }
 
     fn flush_inline(stack: &mut [Frame], inline: &mut Option<(Option<u8>, Inline)>) {
-        if let Some((level, i)) = inline.take() {
-            if !i.is_empty() {
-                push_block(stack, match level {
+        if let Some((level, i)) = inline.take()
+            && !i.is_empty()
+        {
+            push_block(
+                stack,
+                match level {
                     Some(l) => Block::Heading(l, i),
                     None => Block::Paragraph(i),
-                });
-            }
+                },
+            );
         }
     }
 
@@ -175,10 +178,10 @@ fn parse(src: &str) -> Vec<Block> {
             }
             Event::End(TagEnd::Item) => {
                 flush_inline(&mut stack, &mut inline);
-                if let Some(Frame::Item(v)) = stack.pop() {
-                    if let Some(Frame::List { items, .. }) = stack.last_mut() {
-                        items.push(v);
-                    }
+                if let Some(Frame::Item(v)) = stack.pop()
+                    && let Some(Frame::List { items, .. }) = stack.last_mut()
+                {
+                    items.push(v);
                 }
             }
             Event::Start(Tag::CodeBlock(_)) => {
@@ -331,13 +334,7 @@ pub fn render(id: impl Into<SharedString>, src: &str, cx: &mut App) -> AnyElemen
     let id: SharedString = id.into();
     let blocks = parsed(src, cx);
     let mut counter = 0usize;
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(8.))
-        .min_w_0()
-        .children(blocks.iter().map(|b| render_block(&id, b, &mut counter, cx)))
-        .into_any_element()
+    div().flex().flex_col().gap(px(8.)).min_w_0().children(blocks.iter().map(|b| render_block(&id, b, &mut counter, cx))).into_any_element()
 }
 
 fn render_block(id: &SharedString, block: &Block, counter: &mut usize, cx: &App) -> AnyElement {
@@ -400,10 +397,7 @@ fn render_inline(id: &SharedString, i: &Inline, counter: &mut usize, cx: &App) -
             let style = match kind {
                 Span::Strong => HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() },
                 Span::Emphasis => HighlightStyle { font_style: Some(FontStyle::Italic), ..Default::default() },
-                Span::Strike => HighlightStyle {
-                    strikethrough: Some(StrikethroughStyle { thickness: px(1.), color: None }),
-                    ..Default::default()
-                },
+                Span::Strike => HighlightStyle { strikethrough: Some(StrikethroughStyle { thickness: px(1.), color: None }), ..Default::default() },
                 Span::Code => HighlightStyle { background_color: Some(t.colors.input), ..Default::default() },
                 Span::Link => HighlightStyle {
                     color: Some(t.colors.link),

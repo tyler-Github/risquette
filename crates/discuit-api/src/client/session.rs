@@ -1,7 +1,7 @@
 //! §1 Session & bootstrap.
 
-use super::{q, Client};
-use crate::{models::*, Result};
+use super::{Client, q};
+use crate::{Result, models::*};
 use serde_json::json;
 
 impl Client {
@@ -23,8 +23,7 @@ impl Client {
 
     /// `POST /api/_login?action=logout`. **Mutating.** Destroys the session, then forgets local cookies.
     pub fn logout(&self) -> Result<()> {
-        let result: Result<serde_json::Value> =
-            self.http_post("/api/_login", q([("action", Some("logout".into()))]), json!({}));
+        let result: Result<serde_json::Value> = self.http_post("/api/_login", q([("action", Some("logout".into()))]), json!({}));
         self.clear_cookies();
         result.map(|_| ())
     }

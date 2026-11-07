@@ -3,8 +3,8 @@
 //! Every list endpoint exists in two flavours — by owner + list name, and by
 //! numeric list id. Both are exposed; the UI uses the id-based ones.
 
-use super::{q, seg, Client};
-use crate::{models::*, Result};
+use super::{Client, q, seg};
+use crate::{Result, models::*};
 use serde_json::json;
 
 fn by_name(username: &str, listname: &str) -> String {
@@ -14,10 +14,8 @@ fn by_name(username: &str, listname: &str) -> String {
 impl Client {
     /// `GET /api/users/{username}/lists`. Non-owners only see public lists.
     pub fn user_lists(&self, username: &str, sort: Option<&str>, filter: Option<&str>) -> Result<Vec<List>> {
-        let v: Option<Vec<List>> = self.http_get(
-            &format!("/api/users/{}/lists", seg(username)),
-            q([("sort", sort.map(Into::into)), ("filter", filter.map(Into::into))]),
-        )?;
+        let v: Option<Vec<List>> =
+            self.http_get(&format!("/api/users/{}/lists", seg(username)), q([("sort", sort.map(Into::into)), ("filter", filter.map(Into::into))]))?;
         Ok(v.unwrap_or_default())
     }
 
@@ -29,10 +27,7 @@ impl Client {
 
     /// `GET /api/lists/_saved_to` — ids of the viewer's lists containing an item.
     pub fn saved_to(&self, target_id: &str, target_type: ContentType) -> Result<Vec<i64>> {
-        let v: Option<Vec<i64>> = self.http_get(
-            "/api/lists/_saved_to",
-            q([("id", Some(target_id.into())), ("type", Some(target_type.as_str().into()))]),
-        )?;
+        let v: Option<Vec<i64>> = self.http_get("/api/lists/_saved_to", q([("id", Some(target_id.into())), ("type", Some(target_type.as_str().into()))]))?;
         Ok(v.unwrap_or_default())
     }
 

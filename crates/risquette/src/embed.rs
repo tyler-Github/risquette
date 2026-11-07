@@ -12,7 +12,9 @@ pub enum Embed {
         /// A thumbnail URL, when the provider has a predictable one.
         thumbnail: Option<String>,
     },
-    Image { url: String },
+    Image {
+        url: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]

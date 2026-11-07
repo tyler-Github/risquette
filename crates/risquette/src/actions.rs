@@ -6,7 +6,7 @@ use crate::{
     modals,
     nav::{self, MenuItem, Target},
     session::Session,
-    state::{api, AppState},
+    state::{AppState, api},
 };
 use discuit_api::{Comment, CommentAction, ContentType, Post, PostAction, UserGroup};
 use gpui::{App, ClipboardItem};
@@ -35,18 +35,34 @@ pub fn apply_vote<V: Votable>(item: &mut V, up: bool) {
     let current = if *voted == Some(true) { *voted_up } else { None };
     match current {
         Some(prev) if prev == up => {
-            if up { *ups -= 1 } else { *downs -= 1 }
+            if up {
+                *ups -= 1
+            } else {
+                *downs -= 1
+            }
             *voted = Some(false);
             *voted_up = None;
         }
         Some(prev) => {
-            if prev { *ups -= 1 } else { *downs -= 1 }
-            if up { *ups += 1 } else { *downs += 1 }
+            if prev {
+                *ups -= 1
+            } else {
+                *downs -= 1
+            }
+            if up {
+                *ups += 1
+            } else {
+                *downs += 1
+            }
             *voted = Some(true);
             *voted_up = Some(up);
         }
         None => {
-            if up { *ups += 1 } else { *downs += 1 }
+            if up {
+                *ups += 1
+            } else {
+                *downs += 1
+            }
             *voted = Some(true);
             *voted_up = Some(up);
         }
@@ -88,13 +104,17 @@ pub fn vote_post(post: &Post, up: bool, cx: &mut App) {
     apply_vote(&mut optimistic, up);
     bus::emit(ContentEvent::PostUpdated(Box::new(optimistic)), cx);
     let id = post.id.clone();
-    api(cx, move |c| c.vote_post(&id, up), move |result, cx| match result {
-        Ok(p) => bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &original))), cx),
-        Err(e) => {
-            bus::emit(ContentEvent::PostUpdated(Box::new(original)), cx);
-            nav::toast(format!("Vote failed: {}", e.user_message()), cx);
-        }
-    });
+    api(
+        cx,
+        move |c| c.vote_post(&id, up),
+        move |result, cx| match result {
+            Ok(p) => bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &original))), cx),
+            Err(e) => {
+                bus::emit(ContentEvent::PostUpdated(Box::new(original)), cx);
+                nav::toast(format!("Vote failed: {}", e.user_message()), cx);
+            }
+        },
+    );
 }
 
 pub fn vote_comment(comment: &Comment, up: bool, cx: &mut App) {
@@ -106,42 +126,54 @@ pub fn vote_comment(comment: &Comment, up: bool, cx: &mut App) {
     apply_vote(&mut optimistic, up);
     bus::emit(ContentEvent::CommentUpdated(Box::new(optimistic)), cx);
     let id = comment.id.clone();
-    api(cx, move |c| c.vote_comment(&id, up), move |result, cx| match result {
-        Ok(mut c) => {
-            if c.author.is_none() {
-                c.author = original.author.clone();
+    api(
+        cx,
+        move |c| c.vote_comment(&id, up),
+        move |result, cx| match result {
+            Ok(mut c) => {
+                if c.author.is_none() {
+                    c.author = original.author.clone();
+                }
+                bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx)
             }
-            bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx)
-        }
-        Err(e) => {
-            bus::emit(ContentEvent::CommentUpdated(Box::new(original)), cx);
-            nav::toast(format!("Vote failed: {}", e.user_message()), cx);
-        }
-    });
+            Err(e) => {
+                bus::emit(ContentEvent::CommentUpdated(Box::new(original)), cx);
+                nav::toast(format!("Vote failed: {}", e.user_message()), cx);
+            }
+        },
+    );
 }
 
 fn post_action(post: &Post, action: PostAction, done_msg: &'static str, cx: &mut App) {
     let public_id = post.public_id.clone();
     let old = post.clone();
-    api(cx, move |c| c.post_action(&public_id, action), move |r, cx| match r {
-        Ok(p) => {
-            bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &old))), cx);
-            nav::toast(done_msg, cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.post_action(&public_id, action),
+        move |r, cx| match r {
+            Ok(p) => {
+                bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &old))), cx);
+                nav::toast(done_msg, cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 fn delete_post(post: &Post, as_group: UserGroup, delete_content: bool, cx: &mut App) {
     let public_id = post.public_id.clone();
     let old = post.clone();
-    api(cx, move |c| c.delete_post(&public_id, as_group, delete_content), move |r, cx| match r {
-        Ok(p) => {
-            bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &old))), cx);
-            nav::toast("Post deleted", cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.delete_post(&public_id, as_group, delete_content),
+        move |r, cx| match r {
+            Ok(p) => {
+                bus::emit(ContentEvent::PostUpdated(Box::new(merge_post(p, &old))), cx);
+                nav::toast("Post deleted", cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 /// The "…" menu for a post, tailored to the viewer's permissions.
@@ -169,9 +201,7 @@ pub fn post_menu(post: &Post, cx: &App) -> Vec<MenuItem> {
     let link = web.clone();
     items.push(MenuItem::new("Open in browser", move |_, cx| cx.open_url(&link)));
     let community = post.community_name.clone();
-    items.push(MenuItem::new(format!("Go to {}", post.community_name), move |_, cx| {
-        nav::go(Target::Community(community.clone()), cx)
-    }));
+    items.push(MenuItem::new(format!("Go to {}", post.community_name), move |_, cx| nav::go(Target::Community(community.clone()), cx)));
     let author = post.username.clone();
     items.push(MenuItem::new(format!("View @{}", post.username), move |_, cx| nav::go(Target::User(author.clone()), cx)));
 
@@ -193,13 +223,17 @@ pub fn post_menu(post: &Post, cx: &App) -> Vec<MenuItem> {
             items.push(MenuItem::new("Hide", move |_, cx| {
                 let id = p.id.clone();
                 let removed = id.clone();
-                api(cx, move |c| c.hide_post(&id), move |r, cx| match r {
-                    Ok(_) => {
-                        bus::emit(ContentEvent::PostRemoved(removed), cx);
-                        nav::toast("Post hidden", cx);
-                    }
-                    Err(e) => nav::toast(e.user_message(), cx),
-                });
+                api(
+                    cx,
+                    move |c| c.hide_post(&id),
+                    move |r, cx| match r {
+                        Ok(_) => {
+                            bus::emit(ContentEvent::PostRemoved(removed), cx);
+                            nav::toast("Post hidden", cx);
+                        }
+                        Err(e) => nav::toast(e.user_message(), cx),
+                    },
+                );
             }));
             let p = post.clone();
             items.push(MenuItem::new("Report", move |_, cx| modals::open_report(ContentType::Post, p.id.clone(), cx)));
@@ -251,13 +285,25 @@ pub fn post_menu(post: &Post, cx: &App) -> Vec<MenuItem> {
         let p = post.clone();
         items.push(MenuItem::new("Announce (admin)", move |_, cx| {
             let p = p.clone();
-            modals::confirm("Announce post?", "Every user will get a notification.", "Announce", move |cx| post_action(&p, PostAction::Announce, "Announced", cx), cx);
+            modals::confirm(
+                "Announce post?",
+                "Every user will get a notification.",
+                "Announce",
+                move |cx| post_action(&p, PostAction::Announce, "Announced", cx),
+                cx,
+            );
         }));
         let p = post.clone();
         items.push(
             MenuItem::new("Delete with content (admin)", move |_, cx| {
                 let p = p.clone();
-                modals::confirm("Delete post and its content?", "The body, link and images are removed permanently.", "Delete", move |cx| delete_post(&p, UserGroup::Admins, true, cx), cx);
+                modals::confirm(
+                    "Delete post and its content?",
+                    "The body, link and images are removed permanently.",
+                    "Delete",
+                    move |cx| delete_post(&p, UserGroup::Admins, true, cx),
+                    cx,
+                );
             })
             .danger(),
         );
@@ -274,47 +320,63 @@ fn group_label(g: UserGroup) -> &'static str {
 }
 
 pub fn mute_user(user_id: String, username: String, cx: &mut App) {
-    api(cx, move |c| c.mute_user(&user_id), move |r, cx| match r {
-        Ok(m) => {
-            Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-            nav::toast(format!("Muted @{username}"), cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.mute_user(&user_id),
+        move |r, cx| match r {
+            Ok(m) => {
+                Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                nav::toast(format!("Muted @{username}"), cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 pub fn mute_community(community_id: String, name: String, cx: &mut App) {
-    api(cx, move |c| c.mute_community(&community_id), move |r, cx| match r {
-        Ok(m) => {
-            Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-            nav::toast(format!("Muted {name}"), cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.mute_community(&community_id),
+        move |r, cx| match r {
+            Ok(m) => {
+                Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                nav::toast(format!("Muted {name}"), cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 fn comment_action(comment: &Comment, action: CommentAction, msg: &'static str, cx: &mut App) {
     let public_id = comment.post_public_id.clone().unwrap_or_default();
     let id = comment.id.clone();
-    api(cx, move |c| c.comment_action(&public_id, &id, action), move |r, cx| match r {
-        Ok(c) => {
-            bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx);
-            nav::toast(msg, cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.comment_action(&public_id, &id, action),
+        move |r, cx| match r {
+            Ok(c) => {
+                bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx);
+                nav::toast(msg, cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 fn delete_comment(comment: &Comment, group: UserGroup, cx: &mut App) {
     let public_id = comment.post_public_id.clone().unwrap_or_default();
     let id = comment.id.clone();
-    api(cx, move |c| c.delete_comment(&public_id, &id, group), move |r, cx| match r {
-        Ok(c) => {
-            bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx);
-            nav::toast("Comment deleted", cx);
-        }
-        Err(e) => nav::toast(e.user_message(), cx),
-    });
+    api(
+        cx,
+        move |c| c.delete_comment(&public_id, &id, group),
+        move |r, cx| match r {
+            Ok(c) => {
+                bus::emit(ContentEvent::CommentUpdated(Box::new(c)), cx);
+                nav::toast("Comment deleted", cx);
+            }
+            Err(e) => nav::toast(e.user_message(), cx),
+        },
+    );
 }
 
 /// The "…" menu for a comment.

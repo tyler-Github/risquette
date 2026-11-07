@@ -11,8 +11,8 @@ use std::{
     io::{Read, Write},
     path::PathBuf,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -208,7 +208,9 @@ impl Updater {
                 if storage::load().auto_update_disabled {
                     continue;
                 }
-                let idle = this.update(cx, |this, _| matches!(this.status, Status::Idle | Status::UpToDate | Status::Failed(_) | Status::NotConfigured)).unwrap_or(false);
+                let idle = this
+                    .update(cx, |this, _| matches!(this.status, Status::Idle | Status::UpToDate | Status::Failed(_) | Status::NotConfigured))
+                    .unwrap_or(false);
                 if idle {
                     let _ = this.update(cx, |this, cx| this.check(false, cx));
                 }
@@ -356,7 +358,7 @@ impl gpui::Render for UpdateDialog {
             icons::{self, Icon},
             ui,
         };
-        use gpui::{div, prelude::*, px, relative, FontWeight};
+        use gpui::{FontWeight, div, prelude::*, px, relative};
         use risquette_theme::ActiveTheme;
         let t = *cx.theme();
         let status = self.updater.read(cx).status.clone();
@@ -373,7 +375,9 @@ impl gpui::Render for UpdateDialog {
                 ),
             ),
             Status::Checking => ("Checking for updates…".into(), format!("Risquette {CURRENT_VERSION}")),
-            Status::UpToDate | Status::Idle => ("You're up to date".into(), format!("Risquette {CURRENT_VERSION} is the newest version on the {} channel.", channel())),
+            Status::UpToDate | Status::Idle => {
+                ("You're up to date".into(), format!("Risquette {CURRENT_VERSION} is the newest version on the {} channel.", channel()))
+            }
             Status::Failed(_) => ("Couldn't update".into(), format!("Risquette {CURRENT_VERSION}")),
             Status::NotConfigured => ("Updates aren't set up".into(), "This build has no update server. Set one in Settings → Updates.".into()),
         };
@@ -389,22 +393,12 @@ impl gpui::Render for UpdateDialog {
             .gap(px(14.))
             .p(px(18.))
             .rounded(px(8.))
-            .bg(gpui::linear_gradient(
-                135.,
-                gpui::linear_color_stop(t.colors.brand, 0.),
-                gpui::linear_color_stop(t.colors.brand.opacity(0.72), 1.),
-            ))
-            .child(
-                div()
-                    .size(px(48.))
-                    .flex_none()
-                    .rounded(px(12.))
-                    .bg(gpui::white().opacity(0.18))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(icons::sized(header_icon, px(26.), gpui::white())),
-            )
+            .bg(gpui::linear_gradient(135., gpui::linear_color_stop(t.colors.brand, 0.), gpui::linear_color_stop(t.colors.brand.opacity(0.72), 1.)))
+            .child(div().size(px(48.)).flex_none().rounded(px(12.)).bg(gpui::white().opacity(0.18)).flex().items_center().justify_center().child(icons::sized(
+                header_icon,
+                px(26.),
+                gpui::white(),
+            )))
             .child(
                 div()
                     .flex()
@@ -417,23 +411,18 @@ impl gpui::Render for UpdateDialog {
 
         let notes = |r: &Release, cx: &mut Context<Self>| {
             let src = if r.notes.trim().is_empty() { "_No release notes._".to_string() } else { r.notes.clone() };
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(6.))
-                .child(ui::field_label("WHAT'S NEW", cx))
-                .child(
-                    div()
-                        .id("update-notes")
-                        .max_h(px(280.))
-                        .overflow_y_scroll()
-                        .p(px(12.))
-                        .rounded(t.metrics.radius)
-                        .border_1()
-                        .border_color(t.colors.card_border)
-                        .bg(t.colors.bg)
-                        .child(crate::markdown::render("update-notes-md", &src, cx)),
-                )
+            div().flex().flex_col().gap(px(6.)).child(ui::field_label("WHAT'S NEW", cx)).child(
+                div()
+                    .id("update-notes")
+                    .max_h(px(280.))
+                    .overflow_y_scroll()
+                    .p(px(12.))
+                    .rounded(t.metrics.radius)
+                    .border_1()
+                    .border_color(t.colors.card_border)
+                    .bg(t.colors.bg)
+                    .child(crate::markdown::render("update-notes-md", &src, cx)),
+            )
         };
 
         let progress_bar = |fraction: f32| {
@@ -466,27 +455,21 @@ impl gpui::Render for UpdateDialog {
                         crate::nav::close_modal(cx);
                     }))
                     .child(ui::button("upd-later", "Later", cx).on_click(|_, _, cx| crate::nav::close_modal(cx)))
-                    .child(ui::button_main_with_icon("upd-go", Icon::Download, "Download & install", cx).on_click(move |_, _, cx| u2.update(cx, |u, cx| u.download(cx))));
+                    .child(
+                        ui::button_main_with_icon("upd-go", Icon::Download, "Download & install", cx)
+                            .on_click(move |_, _, cx| u2.update(cx, |u, cx| u.download(cx))),
+                    );
             }
             Status::Downloading { release, done, total } => {
                 body = body.child(notes(release, cx));
                 let fraction = if *total > 0 { *done as f32 / *total as f32 } else { 0. };
-                body = body.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(6.))
-                        .child(progress_bar(fraction))
-                        .child(
-                            div()
-                                .flex()
-                                .justify_between()
-                                .text_size(t.fs.s)
-                                .text_color(t.colors.text_light)
-                                .child("Downloading…")
-                                .child(if *total > 0 { format!("{} of {} · {:.0}%", human_size(*done), human_size(*total), fraction * 100.) } else { human_size(*done) }),
-                        ),
-                );
+                body = body.child(div().flex().flex_col().gap(px(6.)).child(progress_bar(fraction)).child(
+                    div().flex().justify_between().text_size(t.fs.s).text_color(t.colors.text_light).child("Downloading…").child(if *total > 0 {
+                        format!("{} of {} · {:.0}%", human_size(*done), human_size(*total), fraction * 100.)
+                    } else {
+                        human_size(*done)
+                    }),
+                ));
                 buttons = buttons.child(ui::button("upd-bg", "Continue in background", cx).on_click(|_, _, cx| crate::nav::close_modal(cx)));
             }
             Status::Ready { release, .. } => {
@@ -501,9 +484,10 @@ impl gpui::Render for UpdateDialog {
                         .child("Downloaded and verified. Risquette will close, update and reopen."),
                 );
                 let u = updater.clone();
-                buttons = buttons
-                    .child(ui::button("upd-later2", "Later", cx).on_click(|_, _, cx| crate::nav::close_modal(cx)))
-                    .child(ui::button_main_with_icon("upd-install", Icon::RefreshCw, "Install & restart", cx).on_click(move |_, _, cx| u.update(cx, |u, cx| u.install(cx))));
+                buttons = buttons.child(ui::button("upd-later2", "Later", cx).on_click(|_, _, cx| crate::nav::close_modal(cx))).child(
+                    ui::button_main_with_icon("upd-install", Icon::RefreshCw, "Install & restart", cx)
+                        .on_click(move |_, _, cx| u.update(cx, |u, cx| u.install(cx))),
+                );
             }
             Status::Checking => {
                 body = body.child(progress_bar(0.35));
@@ -511,15 +495,20 @@ impl gpui::Render for UpdateDialog {
             Status::Failed(e) => {
                 body = body.child(div().text_size(t.fs.normal).text_color(t.colors.red).child(e.clone()));
                 let u = updater.clone();
-                buttons = buttons
-                    .child(ui::button("upd-close", "Close", cx).on_click(|_, _, cx| crate::nav::close_modal(cx)))
-                    .child(ui::button_main_with_icon("upd-retry", Icon::RefreshCw, "Try again", cx).on_click(move |_, _, cx| u.update(cx, |u, cx| u.check(true, cx))));
+                buttons = buttons.child(ui::button("upd-close", "Close", cx).on_click(|_, _, cx| crate::nav::close_modal(cx))).child(
+                    ui::button_main_with_icon("upd-retry", Icon::RefreshCw, "Try again", cx).on_click(move |_, _, cx| u.update(cx, |u, cx| u.check(true, cx))),
+                );
             }
             Status::UpToDate | Status::Idle | Status::NotConfigured => {
                 let u = updater.clone();
                 let configured = status != Status::NotConfigured;
                 buttons = buttons
-                    .when(configured, |b| b.child(ui::button_with_icon("upd-again", Icon::RefreshCw, "Check again", cx).on_click(move |_, _, cx| u.update(cx, |u, cx| u.check(true, cx)))))
+                    .when(configured, |b| {
+                        b.child(
+                            ui::button_with_icon("upd-again", Icon::RefreshCw, "Check again", cx)
+                                .on_click(move |_, _, cx| u.update(cx, |u, cx| u.check(true, cx))),
+                        )
+                    })
                     .child(ui::button_main("upd-ok", "Done", cx).on_click(|_, _, cx| crate::nav::close_modal(cx)));
             }
         }
@@ -530,7 +519,7 @@ impl gpui::Render for UpdateDialog {
 /// The toolbar pill shown while an update is on offer.
 pub fn toolbar_pill(cx: &App) -> Option<gpui::AnyElement> {
     use crate::icons::{self, Icon};
-    use gpui::{div, prelude::*, px, FontWeight};
+    use gpui::{FontWeight, div, prelude::*, px};
     use risquette_theme::ActiveTheme;
     let t = cx.theme();
     let label = match &Updater::entity(cx).read(cx).status {

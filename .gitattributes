@@ -1,0 +1,14 @@
+# Store text with LF line endings in the repository on every OS.
+* text=auto eol=lf
+
+# PowerShell and batch files keep Windows line endings.
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.webp binary
+*.jpg binary
+*.exe binary

@@ -9,7 +9,7 @@ use crate::{
     ui,
 };
 use discuit_api::{AnalyticsEvent, Comment, CommunityRequest, IpBlock, SiteSettings, User};
-use gpui::{div, prelude::*, px, App, Context, FontWeight, SharedString, Task, WeakEntity, Window};
+use gpui::{App, Context, FontWeight, SharedString, Task, WeakEntity, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -104,83 +104,107 @@ impl AdminView {
         self.loading = true;
         self.error = None;
         let task = match self.tab {
-            Tab::Site => api_view(cx, |c| c.site_settings(), |this, r, _| {
-                this.loading = false;
-                match r {
-                    Ok(s) => this.settings = Some(s),
-                    Err(e) => this.error = Some(e.user_message().into()),
-                }
-            }),
+            Tab::Site => api_view(
+                cx,
+                |c| c.site_settings(),
+                |this, r, _| {
+                    this.loading = false;
+                    match r {
+                        Ok(s) => this.settings = Some(s),
+                        Err(e) => this.error = Some(e.user_message().into()),
+                    }
+                },
+            ),
             Tab::Users => {
                 let next = if more { self.users_next.clone() } else { None };
-                api_view(cx, move |c| c.admin_users(next.as_deref()), move |this, r, _| {
+                api_view(
+                    cx,
+                    move |c| c.admin_users(next.as_deref()),
+                    move |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                if !more {
+                                    this.users.clear();
+                                }
+                                this.users.extend(p.users.unwrap_or_default());
+                                this.users_next = p.next;
+                            }
+                            Err(e) => this.error = Some(e.user_message().into()),
+                        }
+                    },
+                )
+            }
+            Tab::Requests => api_view(
+                cx,
+                |c| c.community_requests(),
+                |this, r, _| {
                     this.loading = false;
                     match r {
-                        Ok(p) => {
-                            if !more {
-                                this.users.clear();
-                            }
-                            this.users.extend(p.users.unwrap_or_default());
-                            this.users_next = p.next;
-                        }
+                        Ok(v) => this.requests = v,
                         Err(e) => this.error = Some(e.user_message().into()),
                     }
-                })
-            }
-            Tab::Requests => api_view(cx, |c| c.community_requests(), |this, r, _| {
-                this.loading = false;
-                match r {
-                    Ok(v) => this.requests = v,
-                    Err(e) => this.error = Some(e.user_message().into()),
-                }
-            }),
+                },
+            ),
             Tab::IpBlocks => {
                 let next = if more { self.blocks_next.clone() } else { None };
-                api_view(cx, move |c| c.ip_blocks(Some(50), next.as_deref()), move |this, r, _| {
-                    this.loading = false;
-                    match r {
-                        Ok(p) => {
-                            if !more {
-                                this.blocks.clear();
+                api_view(
+                    cx,
+                    move |c| c.ip_blocks(Some(50), next.as_deref()),
+                    move |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                if !more {
+                                    this.blocks.clear();
+                                }
+                                this.blocks.extend(p.blocks.unwrap_or_default());
+                                this.blocks_next = cursor(&p.next);
                             }
-                            this.blocks.extend(p.blocks.unwrap_or_default());
-                            this.blocks_next = cursor(&p.next);
+                            Err(e) => this.error = Some(e.user_message().into()),
                         }
-                        Err(e) => this.error = Some(e.user_message().into()),
-                    }
-                })
+                    },
+                )
             }
             Tab::Comments => {
                 let next = if more { self.comments_next.clone() } else { None };
-                api_view(cx, move |c| c.admin_comments(next.as_deref()), move |this, r, _| {
-                    this.loading = false;
-                    match r {
-                        Ok(p) => {
-                            if !more {
-                                this.comments.clear();
+                api_view(
+                    cx,
+                    move |c| c.admin_comments(next.as_deref()),
+                    move |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                if !more {
+                                    this.comments.clear();
+                                }
+                                this.comments.extend(p.comments.unwrap_or_default());
+                                this.comments_next = p.next;
                             }
-                            this.comments.extend(p.comments.unwrap_or_default());
-                            this.comments_next = p.next;
+                            Err(e) => this.error = Some(e.user_message().into()),
                         }
-                        Err(e) => this.error = Some(e.user_message().into()),
-                    }
-                })
+                    },
+                )
             }
             Tab::Analytics => {
                 let next = if more { self.events_next.clone() } else { None };
-                api_view(cx, move |c| c.analytics_bss(Some(100), next.as_deref()), move |this, r, _| {
-                    this.loading = false;
-                    match r {
-                        Ok(p) => {
-                            if !more {
-                                this.events.clear();
+                api_view(
+                    cx,
+                    move |c| c.analytics_bss(Some(100), next.as_deref()),
+                    move |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                if !more {
+                                    this.events.clear();
+                                }
+                                this.events.extend(p.events.unwrap_or_default());
+                                this.events_next = cursor(&p.next);
                             }
-                            this.events.extend(p.events.unwrap_or_default());
-                            this.events_next = cursor(&p.next);
+                            Err(e) => this.error = Some(e.user_message().into()),
                         }
-                        Err(e) => this.error = Some(e.user_message().into()),
-                    }
-                })
+                    },
+                )
             }
         };
         self._tasks.push(task);
@@ -192,20 +216,29 @@ impl AdminView {
     }
 
     fn save_settings(&mut self, settings: SiteSettings, cx: &mut Context<Self>) {
-        self._tasks.push(api_view(cx, move |c| c.update_site_settings(&settings), |this, r, cx| match r {
-            Ok(s) => {
-                this.settings = Some(s);
-                nav::toast("Site settings saved", cx);
-            }
-            Err(e) => nav::toast(e.user_message(), cx),
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.update_site_settings(&settings),
+            |this, r, cx| match r {
+                Ok(s) => {
+                    this.settings = Some(s);
+                    nav::toast("Site settings saved", cx);
+                }
+                Err(e) => nav::toast(e.user_message(), cx),
+            },
+        ));
     }
 
     fn render_site(&mut self, cx: &mut Context<Self>) -> gpui::Div {
         let t = *cx.theme();
         let s = self.settings.clone().unwrap_or_default();
         let (s1, s2) = (s.clone(), s.clone());
-        let simple_action = |id: &'static str, label: &'static str, title: &'static str, field: &'static str, f: fn(&discuit_api::Client, &str) -> discuit_api::Result<serde_json::Value>, cx: &mut Context<Self>| {
+        let simple_action = |id: &'static str,
+                             label: &'static str,
+                             title: &'static str,
+                             field: &'static str,
+                             f: fn(&discuit_api::Client, &str) -> discuit_api::Result<serde_json::Value>,
+                             cx: &mut Context<Self>| {
             ui::button(id, label, cx).on_click(move |_, _, cx| {
                 FormSpec::new(title, label, move |v, cx| {
                     let value = v.texts[0].trim().trim_start_matches('@').to_string();
@@ -259,8 +292,22 @@ impl AdminView {
                         .open(cx);
                     }))
                     .child(simple_action("ad-unban", "Unban user…", "Unban user", "Username", |c, v| c.admin_unban_user(v), cx))
-                    .child(simple_action("ad-adddef", "Add default community…", "Add default community", "Community name", |c, v| c.admin_set_default_community(v, true), cx))
-                    .child(simple_action("ad-rmdef", "Remove default community…", "Remove default community", "Community name", |c, v| c.admin_set_default_community(v, false), cx))
+                    .child(simple_action(
+                        "ad-adddef",
+                        "Add default community…",
+                        "Add default community",
+                        "Community name",
+                        |c, v| c.admin_set_default_community(v, true),
+                        cx,
+                    ))
+                    .child(simple_action(
+                        "ad-rmdef",
+                        "Remove default community…",
+                        "Remove default community",
+                        "Community name",
+                        |c, v| c.admin_set_default_community(v, false),
+                        cx,
+                    ))
                     .child(ui::button("ad-userview", "Inspect user…", cx).on_click(|_, _, cx| {
                         FormSpec::new("Inspect user (admin view)", "Inspect", |v, cx| {
                             let name = v.texts[0].trim().trim_start_matches('@').to_string();
@@ -271,7 +318,10 @@ impl AdminView {
                                     let pretty = serde_json::to_string_pretty(&json).unwrap_or_default();
                                     // Show the result in a read-only form.
                                     cx.defer(move |cx| {
-                                        FormSpec::new("User details", "Close", |_, _| Task::ready(Ok(()))).width(640.).field(Field::multiline("JSON", pretty.clone(), 18)).open(cx);
+                                        FormSpec::new("User details", "Close", |_, _| Task::ready(Ok(())))
+                                            .width(640.)
+                                            .field(Field::multiline("JSON", pretty.clone(), 18))
+                                            .open(cx);
                                     });
                                 })
                                 .ok();
@@ -321,9 +371,17 @@ impl AdminView {
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child(div().flex().gap(px(8.)).child(div().font_weight(FontWeight::SEMIBOLD).child(r.community_name.clone())).child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!("by @{}{}", r.by_user, if r.community_exists { " · already exists" } else { "" }))))
+                    .child(div().flex().gap(px(8.)).child(div().font_weight(FontWeight::SEMIBOLD).child(r.community_name.clone())).child(
+                        div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!(
+                            "by @{}{}",
+                            r.by_user,
+                            if r.community_exists { " · already exists" } else { "" }
+                        )),
+                    ))
                     .when_some(r.note.clone(), |d, n| d.child(div().text_size(t.fs.s).child(n)))
-                    .when_some(r.denied_at, |d, _| d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("Denied: {}", r.denied_note.clone().unwrap_or_default()))))
+                    .when_some(r.denied_at, |d, _| {
+                        d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(format!("Denied: {}", r.denied_note.clone().unwrap_or_default())))
+                    })
                     .child(
                         div()
                             .flex()
@@ -344,10 +402,14 @@ impl AdminView {
                             }))
                             .child(ui::button(("ad-delreq", ix), "Delete", cx).on_click(move |_, _, cx| {
                                 let me = me2.clone();
-                                api(cx, move |c| c.delete_community_request(id), move |r, cx| match r {
-                                    Ok(()) => Self::reload(me, cx),
-                                    Err(e) => nav::toast(e.user_message(), cx),
-                                });
+                                api(
+                                    cx,
+                                    move |c| c.delete_community_request(id),
+                                    move |r, cx| match r {
+                                        Ok(()) => Self::reload(me, cx),
+                                        Err(e) => nav::toast(e.user_message(), cx),
+                                    },
+                                );
                             })),
                     ),
             );
@@ -369,13 +431,23 @@ impl AdminView {
                 .gap(px(6.))
                 .child(ui::button_danger("ad-cancelall", "Cancel all blocks", cx).on_click(move |_, _, cx| {
                     let me = me_all.clone();
-                    modals::confirm("Cancel every IP block?", "All blocks currently in effect will be lifted.", "Cancel all", move |cx| {
-                        let me = me.clone();
-                        api(cx, |c| c.cancel_all_ip_blocks(), move |r, cx| match r {
-                            Ok(_) => Self::reload(me, cx),
-                            Err(e) => nav::toast(e.user_message(), cx),
-                        });
-                    }, cx);
+                    modals::confirm(
+                        "Cancel every IP block?",
+                        "All blocks currently in effect will be lifted.",
+                        "Cancel all",
+                        move |cx| {
+                            let me = me.clone();
+                            api(
+                                cx,
+                                |c| c.cancel_all_ip_blocks(),
+                                move |r, cx| match r {
+                                    Ok(_) => Self::reload(me, cx),
+                                    Err(e) => nav::toast(e.user_message(), cx),
+                                },
+                            );
+                        },
+                        cx,
+                    );
                 }))
                 .child(ui::button_main_with_icon("ad-block", Icon::Plus, "Block IP", cx).on_click(move |_, _, cx| {
                     let me = me_add.clone();
@@ -415,15 +487,21 @@ impl AdminView {
                                 b.expires_at.map(|e| format!(" · expires {}", e.format("%Y-%m-%d %H:%M"))).unwrap_or_else(|| " · permanent".into()),
                                 b.note.clone().map(|n| format!(" · {n}")).unwrap_or_default()
                             )))
-                            .when_some(b.associated_users.clone().filter(|u| !u.is_empty()), |d, u| d.child(div().text_size(t.fs.xs).child(format!("Users: {}", u.join(", "))))),
+                            .when_some(b.associated_users.clone().filter(|u| !u.is_empty()), |d, u| {
+                                d.child(div().text_size(t.fs.xs).child(format!("Users: {}", u.join(", "))))
+                            }),
                     )
                     .when(b.in_effect, |d| {
                         d.child(ui::button(("ad-cancel", ix), "Cancel", cx).on_click(move |_, _, cx| {
                             let me = me.clone();
-                            api(cx, move |c| c.cancel_ip_block(id), move |r, cx| match r {
-                                Ok(_) => Self::reload(me, cx),
-                                Err(e) => nav::toast(e.user_message(), cx),
-                            });
+                            api(
+                                cx,
+                                move |c| c.cancel_ip_block(id),
+                                move |r, cx| match r {
+                                    Ok(_) => Self::reload(me, cx),
+                                    Err(e) => nav::toast(e.user_message(), cx),
+                                },
+                            );
                         }))
                     }),
             );
@@ -451,7 +529,13 @@ impl AdminView {
                     .flex()
                     .gap(px(10.))
                     .text_size(t.fs.s)
-                    .child(div().w(px(140.)).flex_none().text_color(t.colors.text_light).child(e.created_at.map(|d| d.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default()))
+                    .child(
+                        div()
+                            .w(px(140.))
+                            .flex_none()
+                            .text_color(t.colors.text_light)
+                            .child(e.created_at.map(|d| d.format("%Y-%m-%d %H:%M").to_string()).unwrap_or_default()),
+                    )
                     .child(div().w(px(90.)).flex_none().font_weight(FontWeight::SEMIBOLD).child(e.name.clone()))
                     .child(div().flex_1().truncate().text_color(t.colors.text_light).child(e.payload.clone().unwrap_or_default())),
             );
@@ -488,24 +572,16 @@ impl Render for AdminView {
                 .flex()
                 .items_start()
                 .gap(px(16.))
-                .child(
-                    div()
-                        .w(px(210.))
-                        .flex_none()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .children(Tab::ALL.map(|tab| {
-                            let active = self.tab == tab;
-                            let color = if active { t.colors.brand } else { t.colors.text_light };
-                            ui::selected(ui::button_clear(SharedString::from(format!("ad-tab-{}", tab.label())), cx), active, cx)
-                                .w_full()
-                                .when(active, |d| d.text_color(t.colors.brand))
-                                .child(crate::icons::icon(tab.icon(), color))
-                                .child(tab.label())
-                                .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
-                        })),
-                )
+                .child(div().w(px(210.)).flex_none().flex().flex_col().gap(px(2.)).children(Tab::ALL.map(|tab| {
+                    let active = self.tab == tab;
+                    let color = if active { t.colors.brand } else { t.colors.text_light };
+                    ui::selected(ui::button_clear(SharedString::from(format!("ad-tab-{}", tab.label())), cx), active, cx)
+                        .w_full()
+                        .when(active, |d| d.text_color(t.colors.brand))
+                        .child(crate::icons::icon(tab.icon(), color))
+                        .child(tab.label())
+                        .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
+                })))
                 .child(
                     ui::card(cx)
                         .flex_1()
@@ -517,7 +593,14 @@ impl Render for AdminView {
                         .when_some(self.error.clone(), |d, e| d.child(div().text_color(t.colors.red).text_size(t.fs.s).child(e)))
                         .child(content)
                         .when(self.loading, |d| d.child(ui::notice("Loading…", cx)))
-                        .when(has_more && !self.loading, |d| d.child(div().flex().justify_center().child(ui::button("ad-more", "Load more", cx).on_click(cx.listener(|this, _, _, cx| this.load(true, cx)))))),
+                        .when(has_more && !self.loading, |d| {
+                            d.child(
+                                div()
+                                    .flex()
+                                    .justify_center()
+                                    .child(ui::button("ad-more", "Load more", cx).on_click(cx.listener(|this, _, _, cx| this.load(true, cx)))),
+                            )
+                        }),
                 ),
         )
     }

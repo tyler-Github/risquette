@@ -3,8 +3,8 @@
 //! Post paths (`/api/posts/{postID}`) take the post's `publicId`; vote and
 //! hide bodies take the post's `id`.
 
-use super::{q, seg, Client};
-use crate::{models::*, Result};
+use super::{Client, q, seg};
+use crate::{Result, models::*};
 use serde::Serialize;
 use serde_json::json;
 
@@ -118,9 +118,7 @@ impl Client {
         let query = match action {
             PostAction::Lock { as_group } => q([("action", Some("lock".into())), ("lockAs", Some(as_group.as_str().into()))]),
             PostAction::Unlock => q([("action", Some("unlock".into()))]),
-            PostAction::ChangeAsUser { group } => {
-                q([("action", Some("changeAsUser".into())), ("userGroup", Some(group.as_str().into()))])
-            }
+            PostAction::ChangeAsUser { group } => q([("action", Some("changeAsUser".into())), ("userGroup", Some(group.as_str().into()))]),
             PostAction::Pin { site_wide } => q([("action", Some("pin".into())), ("siteWide", Some(site_wide.to_string()))]),
             PostAction::Unpin { site_wide } => q([("action", Some("unpin".into())), ("siteWide", Some(site_wide.to_string()))]),
             PostAction::Announce => q([("action", Some("announce".into()))]),
@@ -160,8 +158,7 @@ impl Client {
 
     /// `GET /api/posts/{publicId}/comments?parentId=` — replies to one comment (a bare array).
     pub fn comment_replies(&self, public_id: &str, parent_id: &str) -> Result<Vec<Comment>> {
-        let v: Option<Vec<Comment>> =
-            self.http_get(&format!("/api/posts/{}/comments", seg(public_id)), q([("parentId", Some(parent_id.into()))]))?;
+        let v: Option<Vec<Comment>> = self.http_get(&format!("/api/posts/{}/comments", seg(public_id)), q([("parentId", Some(parent_id.into()))]))?;
         Ok(v.unwrap_or_default())
     }
 
@@ -189,9 +186,7 @@ impl Client {
         let query = match action {
             CommentAction::Lock { as_group } => q([("action", Some("lock".into())), ("lockAs", Some(as_group.as_str().into()))]),
             CommentAction::Unlock => q([("action", Some("unlock".into()))]),
-            CommentAction::ChangeAsUser { group } => {
-                q([("action", Some("changeAsUser".into())), ("userGroup", Some(group.as_str().into()))])
-            }
+            CommentAction::ChangeAsUser { group } => q([("action", Some("changeAsUser".into())), ("userGroup", Some(group.as_str().into()))]),
         };
         self.http_put(&comment_path(public_id, comment_id), query, json!({}))
     }
@@ -241,10 +236,7 @@ mod tests {
         assert_eq!(p.public_id, "abc");
         let r = rx.recv().unwrap();
         assert!(r.request_line.starts_with("POST /api/posts "));
-        assert_eq!(
-            r.json(),
-            json!({"type":"image","title":"Sunset","community":"golang","images":[{"imageId":"img1","caption":"bay"}]})
-        );
+        assert_eq!(r.json(), json!({"type":"image","title":"Sunset","community":"golang","images":[{"imageId":"img1","caption":"bay"}]}));
     }
 
     #[test]

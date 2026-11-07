@@ -13,7 +13,7 @@ use crate::{
     ui,
 };
 use discuit_api::Community;
-use gpui::{div, prelude::*, px, App, Context, Entity, FontWeight, ObjectFit, SharedString, Subscription, Task, Window};
+use gpui::{App, Context, Entity, FontWeight, ObjectFit, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 use std::collections::HashSet;
 
@@ -42,16 +42,20 @@ impl CommunityView {
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let name = self.name.clone();
         self.error = None;
-        self._task = Some(crate::state::api_view(cx, move |c| c.community_by_name(&name), |this, r, cx| match r {
-            Ok(community) => {
-                this.name = community.name.clone();
-                let source = Source::Community { id: community.id.clone(), name: community.name.clone() };
-                let header = cx.new(|cx| CommunityHeader::new(community.clone(), cx));
-                let aside = cx.new(|cx| CommunityAside::new(community, false, cx));
-                this.feed = Some(cx.new(|cx| FeedView::new(source, cx).with_header(header).with_aside(aside)));
-            }
-            Err(e) => this.error = Some(e.user_message().into()),
-        }));
+        self._task = Some(crate::state::api_view(
+            cx,
+            move |c| c.community_by_name(&name),
+            |this, r, cx| match r {
+                Ok(community) => {
+                    this.name = community.name.clone();
+                    let source = Source::Community { id: community.id.clone(), name: community.name.clone() };
+                    let header = cx.new(|cx| CommunityHeader::new(community.clone(), cx));
+                    let aside = cx.new(|cx| CommunityAside::new(community, false, cx));
+                    this.feed = Some(cx.new(|cx| FeedView::new(source, cx).with_header(header).with_aside(aside)));
+                }
+                Err(e) => this.error = Some(e.user_message().into()),
+            },
+        ));
         cx.notify();
     }
 }
@@ -100,20 +104,24 @@ pub fn toggle_join(community: &Community, cx: &mut App) {
     let leave = old.user_joined == Some(true);
     let id = old.id.clone();
     cx.refresh_windows();
-    api(cx, move |c| c.join_community(&id, leave), move |r, cx| {
-        cx.default_global::<JoinsInFlight>().0.remove(&old.id);
-        match r {
-            Ok(c) => {
-                let mut updated = old.clone();
-                updated.user_joined = c.user_joined.or(Some(!leave));
-                updated.no_members = c.no_members;
-                Session::entity(cx).update(cx, |s, cx| s.community_updated(updated.clone(), cx));
-                bus::emit(ContentEvent::CommunityUpdated(Box::new(updated)), cx);
+    api(
+        cx,
+        move |c| c.join_community(&id, leave),
+        move |r, cx| {
+            cx.default_global::<JoinsInFlight>().0.remove(&old.id);
+            match r {
+                Ok(c) => {
+                    let mut updated = old.clone();
+                    updated.user_joined = c.user_joined.or(Some(!leave));
+                    updated.no_members = c.no_members;
+                    Session::entity(cx).update(cx, |s, cx| s.community_updated(updated.clone(), cx));
+                    bus::emit(ContentEvent::CommunityUpdated(Box::new(updated)), cx);
+                }
+                Err(e) => nav::toast(e.user_message(), cx),
             }
-            Err(e) => nav::toast(e.user_message(), cx),
-        }
-        cx.refresh_windows();
-    });
+            cx.refresh_windows();
+        },
+    );
 }
 
 pub fn join_button(id: &'static str, c: &Community, cx: &App) -> gpui::Stateful<gpui::Div> {
@@ -139,13 +147,17 @@ fn community_menu(c: &Community, cx: &App) -> Vec<MenuItem> {
         if muted {
             items.push(MenuItem::new(format!("Unmute {name}"), move |_, cx| {
                 let id = id.clone();
-                api(cx, move |cl| cl.unmute_community(&id).and_then(|_| cl.mutes()), |r, cx| match r {
-                    Ok(m) => {
-                        Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-                        nav::toast("Unmuted", cx);
-                    }
-                    Err(e) => nav::toast(e.user_message(), cx),
-                });
+                api(
+                    cx,
+                    move |cl| cl.unmute_community(&id).and_then(|_| cl.mutes()),
+                    |r, cx| match r {
+                        Ok(m) => {
+                            Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                            nav::toast("Unmuted", cx);
+                        }
+                        Err(e) => nav::toast(e.user_message(), cx),
+                    },
+                );
             }));
         } else {
             items.push(MenuItem::new(format!("Mute {name}"), move |_, cx| actions::mute_community(id.clone(), name.clone(), cx)));
@@ -155,12 +167,20 @@ fn community_menu(c: &Community, cx: &App) -> Vec<MenuItem> {
         let name = c.name.clone();
         items.push(MenuItem::new("Make default community (admin)", move |_, cx| {
             let n = name.clone();
-            api(cx, move |cl| cl.admin_set_default_community(&n, true), |r, cx| nav::toast(r.map(|_| "Added to defaults".to_string()).unwrap_or_else(|e| e.user_message()), cx));
+            api(
+                cx,
+                move |cl| cl.admin_set_default_community(&n, true),
+                |r, cx| nav::toast(r.map(|_| "Added to defaults".to_string()).unwrap_or_else(|e| e.user_message()), cx),
+            );
         }));
         let name = c.name.clone();
         items.push(MenuItem::new("Remove from defaults (admin)", move |_, cx| {
             let n = name.clone();
-            api(cx, move |cl| cl.admin_set_default_community(&n, false), |r, cx| nav::toast(r.map(|_| "Removed from defaults".to_string()).unwrap_or_else(|e| e.user_message()), cx));
+            api(
+                cx,
+                move |cl| cl.admin_set_default_community(&n, false),
+                |r, cx| nav::toast(r.map(|_| "Removed from defaults".to_string()).unwrap_or_else(|e| e.user_message()), cx),
+            );
         }));
     }
     items
@@ -214,14 +234,26 @@ impl Render for CommunityHeader {
                         .flex()
                         .flex_col()
                         .child(div().text_size(t.fs.xxl - px(3.)).font_weight(FontWeight::BOLD).truncate().child(c.name.clone()))
-                        .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!("{}{}", ui::plural(c.no_members, "member"), if c.nsfw { " · NSFW" } else { "" }))),
+                        .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!(
+                            "{}{}",
+                            ui::plural(c.no_members, "member"),
+                            if c.nsfw { " · NSFW" } else { "" }
+                        ))),
                 )
                 .child(
                     div()
                         .flex()
                         .gap(px(6.))
-                        .when(is_mod, |d| d.child(ui::button_with_icon("c-modtools", Icon::Shield, "Mod tools", cx).on_click(move |_, _, cx| nav::go(Target::ModTools(mod_name.clone()), cx))))
-                        .child(ui::button_with_icon("c-newpost", Icon::Plus, "New post", cx).on_click(move |_, _, cx| nav::go(Target::NewPost { community: Some(new_post_name.clone()) }, cx)))
+                        .when(is_mod, |d| {
+                            d.child(
+                                ui::button_with_icon("c-modtools", Icon::Shield, "Mod tools", cx)
+                                    .on_click(move |_, _, cx| nav::go(Target::ModTools(mod_name.clone()), cx)),
+                            )
+                        })
+                        .child(
+                            ui::button_with_icon("c-newpost", Icon::Plus, "New post", cx)
+                                .on_click(move |_, _, cx| nav::go(Target::NewPost { community: Some(new_post_name.clone()) }, cx)),
+                        )
                         .child(join_button("c-join", &c, cx))
                         .child(ui::menu_button("c-menu", move |cx| community_menu(&menu_c, cx), cx)),
                 ),
@@ -289,11 +321,34 @@ impl Render for CommunityAside {
                 .flex()
                 .gap(px(16.))
                 .text_size(t.fs.s)
-                .child(div().flex().flex_col().child(div().font_weight(FontWeight::BOLD).child(ui::compact(c.no_members))).child(div().text_color(t.colors.text_light).child("members")))
-                .when_some(c.created_at, |d, at| d.child(div().flex().flex_col().child(div().font_weight(FontWeight::BOLD).child(at.format("%b %Y").to_string())).child(div().text_color(t.colors.text_light).child("created")))),
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(div().font_weight(FontWeight::BOLD).child(ui::compact(c.no_members)))
+                        .child(div().text_color(t.colors.text_light).child("members")),
+                )
+                .when_some(c.created_at, |d, at| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .child(div().font_weight(FontWeight::BOLD).child(at.format("%b %Y").to_string()))
+                            .child(div().text_color(t.colors.text_light).child("created")),
+                    )
+                }),
         );
         if c.posting_restricted {
-            about = about.child(div().flex().items_center().gap(px(6.)).text_size(t.fs.xs).text_color(t.colors.text_light).child(icons::sized(Icon::Lock, px(12.), t.colors.text_light)).child("Only moderators can post"));
+            about = about.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(t.fs.xs)
+                    .text_color(t.colors.text_light)
+                    .child(icons::sized(Icon::Lock, px(12.), t.colors.text_light))
+                    .child("Only moderators can post"),
+            );
         }
         if self.standalone {
             about = about.child(div().flex().gap(px(6.)).child(join_button("ca-join", &c, cx)));
@@ -336,7 +391,11 @@ impl Render for CommunityAside {
                                     .gap(px(2.))
                                     .child(div().font_weight(FontWeight::SEMIBOLD).child(markdown::render(format!("ca-rule-{ix}"), &r.rule, cx)))
                                     .when_some(r.description.clone().filter(|d| !d.is_empty()), |d, desc| {
-                                        d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(markdown::render(format!("ca-rule-d-{ix}"), &desc, cx)))
+                                        d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(markdown::render(
+                                            format!("ca-rule-d-{ix}"),
+                                            &desc,
+                                            cx,
+                                        )))
                                     }),
                             ),
                     );

@@ -1,8 +1,8 @@
 //! A user profile: details, badges, moderated communities, and their posts and comments.
 
 use crate::{
-    icons::Icon,
     feed::{FeedView, Source},
+    icons::Icon,
     markdown,
     modals::{self, Field, FormSpec},
     nav::{self, MenuItem, Target},
@@ -11,7 +11,7 @@ use crate::{
     ui,
 };
 use discuit_api::User;
-use gpui::{div, prelude::*, px, Context, Entity, FontWeight, SharedString, Task, Window};
+use gpui::{Context, Entity, FontWeight, SharedString, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct UserView {
@@ -31,15 +31,19 @@ impl UserView {
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         let name = self.username.clone();
         self.error = None;
-        self._task = Some(api_view(cx, move |c| c.user(&name), |this, r, cx| match r {
-            Ok(user) => {
-                let source = Source::User(user.username.clone());
-                let header = cx.new(|_| UserHeader { user: user.clone() });
-                let aside = cx.new(|_| UserAside { user, header });
-                this.feed = Some(cx.new(|cx| FeedView::new(source, cx).with_aside(aside).aside_on_top_when_narrow()));
-            }
-            Err(e) => this.error = Some(e.user_message().into()),
-        }));
+        self._task = Some(api_view(
+            cx,
+            move |c| c.user(&name),
+            |this, r, cx| match r {
+                Ok(user) => {
+                    let source = Source::User(user.username.clone());
+                    let header = cx.new(|_| UserHeader { user: user.clone() });
+                    let aside = cx.new(|_| UserAside { user, header });
+                    this.feed = Some(cx.new(|cx| FeedView::new(source, cx).with_aside(aside).aside_on_top_when_narrow()));
+                }
+                Err(e) => this.error = Some(e.user_message().into()),
+            },
+        ));
         cx.notify();
     }
 }
@@ -74,13 +78,17 @@ impl UserHeader {
             if muted {
                 items.push(MenuItem::new(format!("Unmute @{name}"), move |_, cx| {
                     let id = id.clone();
-                    api(cx, move |c| c.unmute_user(&id).and_then(|_| c.mutes()), |r, cx| match r {
-                        Ok(m) => {
-                            Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
-                            nav::toast("Unmuted", cx);
-                        }
-                        Err(e) => nav::toast(e.user_message(), cx),
-                    });
+                    api(
+                        cx,
+                        move |c| c.unmute_user(&id).and_then(|_| c.mutes()),
+                        |r, cx| match r {
+                            Ok(m) => {
+                                Session::entity(cx).update(cx, |s, cx| s.set_mutes(m, cx));
+                                nav::toast("Unmuted", cx);
+                            }
+                            Err(e) => nav::toast(e.user_message(), cx),
+                        },
+                    );
                 }));
             } else {
                 items.push(MenuItem::new(format!("Mute @{name}"), move |_, cx| crate::actions::mute_user(id.clone(), name.clone(), cx)));
@@ -91,10 +99,20 @@ impl UserHeader {
             if u.is_banned {
                 items.push(MenuItem::new("Unban site-wide (admin)", move |_, cx| {
                     let n = name.clone();
-                    modals::confirm(format!("Unban @{n}?"), "They will be able to log in and post again.", "Unban", move |cx| {
-                        let n = n.clone();
-                        api(cx, move |c| c.admin_unban_user(&n), |r, cx| nav::toast(r.map(|_| "User unbanned".to_string()).unwrap_or_else(|e| e.user_message()), cx));
-                    }, cx);
+                    modals::confirm(
+                        format!("Unban @{n}?"),
+                        "They will be able to log in and post again.",
+                        "Unban",
+                        move |cx| {
+                            let n = n.clone();
+                            api(
+                                cx,
+                                move |c| c.admin_unban_user(&n),
+                                |r, cx| nav::toast(r.map(|_| "User unbanned".to_string()).unwrap_or_else(|e| e.user_message()), cx),
+                            );
+                        },
+                        cx,
+                    );
                 }));
             } else {
                 items.push(
@@ -169,14 +187,11 @@ impl Render for UserHeader {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .child(ui::avatar(pic.as_deref(), &u.username, px(64.), cx))
-                    .child(ui::menu_button("u-menu", move |_| menu.clone(), cx)),
-            )
+            .child(div().flex().items_start().justify_between().child(ui::avatar(pic.as_deref(), &u.username, px(64.), cx)).child(ui::menu_button(
+                "u-menu",
+                move |_| menu.clone(),
+                cx,
+            )))
             .child(
                 div()
                     .flex()
@@ -201,17 +216,31 @@ impl Render for UserHeader {
                     .child(div().font_weight(FontWeight::BOLD).text_size(t.fs.l).child(n))
                     .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(l))
             })))
-            .when_some(u.created_at, |d, at| d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("Joined {}", at.format("%b %-d, %Y")))))
+            .when_some(u.created_at, |d, at| {
+                d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("Joined {}", at.format("%b %-d, %Y"))))
+            })
             .when_some(u.badges.clone().filter(|b| !b.is_empty()), |d, badges| {
                 d.child(div().flex().flex_wrap().gap(px(6.)).children(badges.into_iter().map(|b| {
-                    div().px(px(8.)).py(px(2.)).rounded(px(10.)).bg(t.colors.brand.opacity(0.12)).text_color(t.colors.brand).text_size(t.fs.xs).font_weight(FontWeight::SEMIBOLD).child(b.kind)
+                    div()
+                        .px(px(8.))
+                        .py(px(2.))
+                        .rounded(px(10.))
+                        .bg(t.colors.brand.opacity(0.12))
+                        .text_color(t.colors.brand)
+                        .text_size(t.fs.xs)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(b.kind)
                 })))
             })
             .when_some(u.about_me.clone().filter(|a| !a.trim().is_empty()), |d, text| {
                 d.child(div().h(px(1.)).bg(t.colors.separator)).child(div().text_size(t.fs.s).child(markdown::render("u-about", &text, cx)))
             })
-            .when_some(u.last_seen_month.clone(), |d, month| d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("Last seen {month}"))))
-            .when(is_self, |d| d.child(ui::button_with_icon("u-edit", Icon::Pencil, "Edit profile", cx).w_full().on_click(|_, _, cx| nav::go(Target::Settings, cx))))
+            .when_some(u.last_seen_month.clone(), |d, month| {
+                d.child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("Last seen {month}")))
+            })
+            .when(is_self, |d| {
+                d.child(ui::button_with_icon("u-edit", Icon::Pencil, "Edit profile", cx).w_full().on_click(|_, _, cx| nav::go(Target::Settings, cx)))
+            })
     }
 }
 

@@ -10,8 +10,8 @@
 mod install;
 
 use gpui::{
-    div, img, prelude::*, px, relative, size, App, Application, Bounds, Context, FontWeight, Hsla, Image, ImageFormat,
-    PathPromptOptions, SharedString, Task, TitlebarOptions, Window, WindowAppearance, WindowBounds, WindowOptions,
+    App, Application, Bounds, Context, FontWeight, Hsla, Image, ImageFormat, PathPromptOptions, SharedString, Task, TitlebarOptions, Window, WindowAppearance,
+    WindowBounds, WindowOptions, div, img, prelude::*, px, relative, size,
 };
 use install::Options;
 use risquette_theme::{ActiveTheme, Mode as ThemeMode, Theme};
@@ -334,7 +334,13 @@ impl Setup {
                     .items_center()
                     .gap(px(10.))
                     .text_size(px(14.))
-                    .text_color(gpui::white().opacity(if active { 1. } else if done { 0.85 } else { 0.55 }))
+                    .text_color(gpui::white().opacity(if active {
+                        1.
+                    } else if done {
+                        0.85
+                    } else {
+                        0.55
+                    }))
                     .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::NORMAL })
                     .child(
                         div()
@@ -387,17 +393,13 @@ impl Setup {
                     None => "A fast, native desktop client for Discuit. Browse your communities, post and comment, and get notified without keeping a browser tab open.".into(),
                 };
                 let feature = |title: &'static str, body: &'static str| {
-                    div()
-                        .flex()
-                        .gap(px(12.))
-                        .child(div().mt(px(6.)).size(px(8.)).flex_none().rounded_full().bg(t.colors.brand))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(t.colors.text).child(title))
-                                .child(div().text_size(px(13.)).text_color(t.colors.text_light).child(body)),
-                        )
+                    div().flex().gap(px(12.)).child(div().mt(px(6.)).size(px(8.)).flex_none().rounded_full().bg(t.colors.brand)).child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .child(div().text_size(px(14.)).font_weight(FontWeight::SEMIBOLD).text_color(t.colors.text).child(title))
+                            .child(div().text_size(px(13.)).text_color(t.colors.text_light).child(body)),
+                    )
                 };
                 let body = div()
                     .flex()
@@ -414,12 +416,12 @@ impl Setup {
                             .child(feature("Stays up to date", "New versions install themselves when you choose to.")),
                     )
                     .child(text("Risquette installs for your Windows account only and doesn't need administrator rights.".into()));
-                let footer = footer
-                    .child(button("cancel", "Cancel", false, cx).on_click(cx.listener(|_, _, _, cx| cx.quit())))
-                    .child(button("next", "Next", true, cx).on_click(cx.listener(|this, _, _, cx| {
+                let footer = footer.child(button("cancel", "Cancel", false, cx).on_click(cx.listener(|_, _, _, cx| cx.quit()))).child(
+                    button("next", "Next", true, cx).on_click(cx.listener(|this, _, _, cx| {
                         this.page = Page::Options;
                         cx.notify();
-                    })));
+                    })),
+                );
                 (if self.existing.is_some() { "Update Risquette".into() } else { "Welcome to Risquette".into() }, body.into_any_element(), footer)
             }
             Page::Options => {
@@ -453,36 +455,41 @@ impl Setup {
                             )
                             .child(button("browse", "Change…", false, cx).on_click(cx.listener(|this, _, _, cx| this.choose_dir(cx)))),
                     )
-                    .child(div().text_size(px(12.)).text_color(t.colors.text_light).child(format!("Needs about {} of disk space.", mb(install::payload_size() * 2))));
-                let body = div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(20.))
-                    .child(location)
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(12.))
-                            .child(checkbox("start", o.start_menu_shortcut, "Add to the Start menu", None, cx).on_click(cx.listener(|this, _, _, cx| {
-                                this.opts.start_menu_shortcut = !this.opts.start_menu_shortcut;
-                                cx.notify();
-                            })))
-                            .child(checkbox("desk", o.desktop_shortcut, "Create a desktop shortcut", None, cx).on_click(cx.listener(|this, _, _, cx| {
-                                this.opts.desktop_shortcut = !this.opts.desktop_shortcut;
-                                cx.notify();
-                            })))
-                            .child(checkbox("launch", self.launch_after, "Open Risquette when setup finishes", None, cx).on_click(cx.listener(|this, _, _, cx| {
+                            .text_size(px(12.))
+                            .text_color(t.colors.text_light)
+                            .child(format!("Needs about {} of disk space.", mb(install::payload_size() * 2))),
+                    );
+                let body = div().flex().flex_col().gap(px(20.)).child(location).child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(12.))
+                        .child(checkbox("start", o.start_menu_shortcut, "Add to the Start menu", None, cx).on_click(cx.listener(|this, _, _, cx| {
+                            this.opts.start_menu_shortcut = !this.opts.start_menu_shortcut;
+                            cx.notify();
+                        })))
+                        .child(checkbox("desk", o.desktop_shortcut, "Create a desktop shortcut", None, cx).on_click(cx.listener(|this, _, _, cx| {
+                            this.opts.desktop_shortcut = !this.opts.desktop_shortcut;
+                            cx.notify();
+                        })))
+                        .child(checkbox("launch", self.launch_after, "Open Risquette when setup finishes", None, cx).on_click(cx.listener(
+                            |this, _, _, cx| {
                                 this.launch_after = !this.launch_after;
                                 cx.notify();
-                            }))),
-                    );
+                            },
+                        ))),
+                );
                 let footer = footer
                     .child(button("back", "Back", false, cx).on_click(cx.listener(|this, _, _, cx| {
                         this.page = Page::Welcome;
                         cx.notify();
                     })))
-                    .child(button("install", if self.existing.is_some() { "Update" } else { "Install" }, true, cx).on_click(cx.listener(|this, _, _, cx| this.start_install(None, cx))));
+                    .child(
+                        button("install", if self.existing.is_some() { "Update" } else { "Install" }, true, cx)
+                            .on_click(cx.listener(|this, _, _, cx| this.start_install(None, cx))),
+                    );
                 ("Choose how to install".into(), body.into_any_element(), footer)
             }
             Page::Working => {
@@ -491,20 +498,15 @@ impl Setup {
                     _ if self.existing.is_some() => "Updating Risquette".to_string(),
                     _ => "Installing Risquette".to_string(),
                 };
-                let body = div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.))
-                    .child(progress_bar(self.progress, cx))
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .text_size(px(13.))
-                            .text_color(t.colors.text_light)
-                            .child(self.message.clone())
-                            .child(format!("{:.0}%", self.progress * 100.)),
-                    );
+                let body = div().flex().flex_col().gap(px(10.)).child(progress_bar(self.progress, cx)).child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .text_size(px(13.))
+                        .text_color(t.colors.text_light)
+                        .child(self.message.clone())
+                        .child(format!("{:.0}%", self.progress * 100.)),
+                );
                 (title, body.into_any_element(), footer)
             }
             Page::Done => {
@@ -533,12 +535,12 @@ impl Setup {
                     .child(div().p(px(12.)).rounded(px(6.)).bg(t.colors.red.opacity(0.1)).text_size(px(14.)).text_color(t.colors.red).child(e))
                     .child(text("Nothing was left half-installed: the previous version (if any) still works.".into()));
                 let retry_mode = self.mode.clone();
-                let footer = footer.child(button("close", "Close", false, cx).on_click(cx.listener(|_, _, _, cx| cx.quit()))).child(button("retry", "Try again", true, cx).on_click(cx.listener(
-                    move |this, _, _, cx| match retry_mode {
+                let footer = footer.child(button("close", "Close", false, cx).on_click(cx.listener(|_, _, _, cx| cx.quit()))).child(
+                    button("retry", "Try again", true, cx).on_click(cx.listener(move |this, _, _, cx| match retry_mode {
                         Mode::Uninstall => this.start_uninstall(cx),
                         _ => this.start_install(None, cx),
-                    },
-                )));
+                    })),
+                );
                 ("Something went wrong".into(), body.into_any_element(), footer)
             }
             Page::ConfirmUninstall => {
@@ -548,7 +550,14 @@ impl Setup {
                     .gap(px(18.))
                     .child(text(format!("This removes Risquette from {} along with its shortcuts.", self.opts.dir.display())))
                     .child(
-                        checkbox("data", self.remove_data, "Also remove my settings and saved logins", Some("Keep them if you plan to install Risquette again."), cx).on_click(cx.listener(|this, _, _, cx| {
+                        checkbox(
+                            "data",
+                            self.remove_data,
+                            "Also remove my settings and saved logins",
+                            Some("Keep them if you plan to install Risquette again."),
+                            cx,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
                             this.remove_data = !this.remove_data;
                             cx.notify();
                         })),
@@ -592,16 +601,12 @@ impl Setup {
                         gpui::linear_color_stop(Hsla { l: (brand.l - 0.1).max(0.15), ..brand }, 1.),
                     ))
                     .child(img(self.logo.clone()).size(px(44.)).rounded(px(10.)))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .child(div().text_size(px(18.)).font_weight(FontWeight::BOLD).text_color(gpui::white()).child(title))
-                            .child(div().text_size(px(12.)).text_color(gpui::white().opacity(0.8)).child(match &self.existing {
-                                Some(v) => format!("From version {v}"),
-                                None => "A desktop client for Discuit".to_string(),
-                            })),
-                    ),
+                    .child(div().flex().flex_col().child(div().text_size(px(18.)).font_weight(FontWeight::BOLD).text_color(gpui::white()).child(title)).child(
+                        div().text_size(px(12.)).text_color(gpui::white().opacity(0.8)).child(match &self.existing {
+                            Some(v) => format!("From version {v}"),
+                            None => "A desktop client for Discuit".to_string(),
+                        }),
+                    )),
             )
             .child(
                 div()
@@ -612,7 +617,8 @@ impl Setup {
                     .gap(px(10.))
                     .justify_center()
                     .when(failed.is_none(), |d| {
-                        d.child(progress_bar(if self.page == Page::Done { 1. } else { self.progress }, cx)).child(div().text_size(px(13.)).text_color(t.colors.text_light).child(self.message.clone()))
+                        d.child(progress_bar(if self.page == Page::Done { 1. } else { self.progress }, cx))
+                            .child(div().text_size(px(13.)).text_color(t.colors.text_light).child(self.message.clone()))
                     })
                     .when_some(failed, |d, e| {
                         d.child(div().text_size(px(13.)).text_color(t.colors.red).child(e)).child(

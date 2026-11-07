@@ -56,6 +56,20 @@ Unit tests never contact a real instance. Write endpoints are checked against a 
 cargo test -p discuit-api --test live_read -- --ignored
 ```
 
+### CI
+
+Every pull request and push to `main` runs `.github/workflows/ci.yml`. All of these checks must pass before a pull request can merge:
+
+| Check | Runs |
+| --- | --- |
+| Formatting | `cargo fmt --all --check` (style in `rustfmt.toml`) |
+| Clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` |
+| Tests | `cargo test --workspace --locked`, then a full build |
+| Docs and links | `python scripts/check_docs.py`: every local link and image in the Markdown exists |
+| Dependency audit | `cargo audit` against the RustSec advisory database |
+
+Dependabot opens weekly pull requests for Cargo and GitHub Actions updates. GPUI, wry and windows are left alone because their versions must match. Third-party actions are pinned to exact commits.
+
 ### Manual checklist
 
 These features change data on the server, so they're tested by hand.

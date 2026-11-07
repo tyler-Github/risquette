@@ -1,7 +1,7 @@
 //! Lucide icons (ISC licensed, see `assets/LICENSE-lucide.txt`), bundled into
 //! the binary and served to GPUI through an [`AssetSource`].
 
-use gpui::{prelude::*, px, svg, AssetSource, Hsla, Pixels, SharedString, Svg};
+use gpui::{AssetSource, Hsla, Pixels, SharedString, Svg, prelude::*, px, svg};
 use std::borrow::Cow;
 
 macro_rules! icons {

@@ -2,25 +2,24 @@
 
 use crate::{
     actions,
-    icons::{self, Icon},
     bus::{self, ContentEvent},
-    input::{InputEvent, TextInput},
-    markdown,
-    nav::{self, Target},
     community::CommunityAside,
-    layout,
-    post_card::{vote_pill, COLUMN_WIDTH},
+    icons::{self, Icon},
+    input::{InputEvent, TextInput},
+    layout, markdown,
+    nav::{self, Target},
+    post_card::{COLUMN_WIDTH, vote_pill},
     session::Session,
-    state::{api_view, AppState},
+    state::{AppState, api_view},
     ui,
 };
 use discuit_api::{
-    tree::{self, CommentRow},
     Comment, Post, PostType, UserGroup,
+    tree::{self, CommentRow},
 };
 use gpui::{
-    div, list, prelude::*, px, AnyElement, ClipboardItem, Context, Entity, FontWeight, ListAlignment,
-    ListState, ObjectFit, SharedString, Subscription, Task, Window,
+    AnyElement, ClipboardItem, Context, Entity, FontWeight, ListAlignment, ListState, ObjectFit, SharedString, Subscription, Task, Window, div, list,
+    prelude::*, px,
 };
 use risquette_theme::ActiveTheme;
 use std::collections::HashSet;
@@ -88,9 +87,11 @@ impl PostView {
 
     fn make_composer(parent: Option<String>, cx: &mut Context<Self>) -> Composer {
         let input = cx.new(|cx| {
-            TextInput::new(cx)
-                .multiline(if parent.is_some() { 3 } else { 4 })
-                .placeholder(if parent.is_some() { "Write a reply… (Ctrl+Enter to send)" } else { "Add a comment… (markdown, Ctrl+Enter to send)" })
+            TextInput::new(cx).multiline(if parent.is_some() { 3 } else { 4 }).placeholder(if parent.is_some() {
+                "Write a reply… (Ctrl+Enter to send)"
+            } else {
+                "Add a comment… (markdown, Ctrl+Enter to send)"
+            })
         });
         let sub = cx.subscribe(&input, move |this: &mut Self, _, ev: &InputEvent, cx| {
             if *ev == InputEvent::Submit {
@@ -108,34 +109,38 @@ impl PostView {
         self.loading = true;
         self.error = None;
         let id = self.public_id.clone();
-        self._tasks.push(api_view(cx, move |c| c.post(&id), |this, result, cx| {
-            this.loading = false;
-            match result {
-                Ok(mut post) => {
-                    if let Some(c) = post.community.clone() {
-                        this.aside = Some(cx.new(|cx| CommunityAside::new(c, true, cx)));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.post(&id),
+            |this, result, cx| {
+                this.loading = false;
+                match result {
+                    Ok(mut post) => {
+                        if let Some(c) = post.community.clone() {
+                            this.aside = Some(cx.new(|cx| CommunityAside::new(c, true, cx)));
+                        }
+                        this.comments = post.comments.take().unwrap_or_default();
+                        this.comments_next = post.comments_next.take();
+                        this.post = Some(post);
                     }
-                    this.comments = post.comments.take().unwrap_or_default();
-                    this.comments_next = post.comments_next.take();
-                    this.post = Some(post);
+                    Err(err) => {
+                        log::error!("post {}: {err}", this.public_id);
+                        this.error = Some(err.user_message().into());
+                    }
                 }
-                Err(err) => {
-                    log::error!("post {}: {err}", this.public_id);
-                    this.error = Some(err.user_message().into());
-                }
-            }
-            this.rebuild_rows();
-        }));
+                this.rebuild_rows();
+            },
+        ));
     }
 
     fn on_content(&mut self, ev: &ContentEvent, cx: &mut Context<Self>) {
         match ev {
             ContentEvent::PostUpdated(p) => {
-                if let Some(old) = &self.post {
-                    if old.id == p.id {
-                        self.post = Some(actions::merge_post((**p).clone(), old));
-                        cx.notify();
-                    }
+                if let Some(old) = &self.post
+                    && old.id == p.id
+                {
+                    self.post = Some(actions::merge_post((**p).clone(), old));
+                    cx.notify();
                 }
             }
             ContentEvent::CommentUpdated(c) => {
@@ -160,17 +165,21 @@ impl PostView {
         }
         self.loading = true;
         let id = self.public_id.clone();
-        self._tasks.push(api_view(cx, move |c| c.comments(&id, Some(&next)), |this, result, _| {
-            this.loading = false;
-            match result {
-                Ok(page) => {
-                    this.merge(page.comments.unwrap_or_default());
-                    this.comments_next = page.next;
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.comments(&id, Some(&next)),
+            |this, result, _| {
+                this.loading = false;
+                match result {
+                    Ok(page) => {
+                        this.merge(page.comments.unwrap_or_default());
+                        this.comments_next = page.next;
+                    }
+                    Err(err) => this.error = Some(err.user_message().into()),
                 }
-                Err(err) => this.error = Some(err.user_message().into()),
-            }
-            this.rebuild_rows();
-        }));
+                this.rebuild_rows();
+            },
+        ));
         cx.notify();
     }
 
@@ -180,14 +189,18 @@ impl PostView {
         }
         let id = self.public_id.clone();
         let parent = comment_id.clone();
-        self._tasks.push(api_view(cx, move |c| c.comment_replies(&id, &parent), move |this, result, _| {
-            this.loading_replies.remove(&comment_id);
-            match result {
-                Ok(replies) => this.merge(replies),
-                Err(err) => log::error!("replies for {comment_id}: {err}"),
-            }
-            this.rebuild_rows();
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.comment_replies(&id, &parent),
+            move |this, result, _| {
+                this.loading_replies.remove(&comment_id);
+                match result {
+                    Ok(replies) => this.merge(replies),
+                    Err(err) => log::error!("replies for {comment_id}: {err}"),
+                }
+                this.rebuild_rows();
+            },
+        ));
         cx.notify();
     }
 
@@ -324,7 +337,9 @@ impl PostView {
                 .p(t.metrics.gap)
                 .text_color(t.colors.text_light)
                 .child(msg)
-                .when(self.error.is_some(), |d| d.child(ui::button("post-retry", "Retry", cx).mt(px(10.)).on_click(cx.listener(|this, _, _, cx| this.load(cx)))))
+                .when(self.error.is_some(), |d| {
+                    d.child(ui::button("post-retry", "Retry", cx).mt(px(10.)).on_click(cx.listener(|this, _, _, cx| this.load(cx))))
+                })
                 .into_any_element();
         };
 
@@ -365,16 +380,16 @@ impl PostView {
             .child(ui::time_ago(post.created_at))
             .when(post.edited_at.is_some(), |d| d.child("· edited"))
             .when(post.locked, |d| d.child(div().text_color(t.colors.red).child("· Locked")))
-            .when(post.deleted, |d| d.child(div().text_color(t.colors.red).child(format!("· Deleted{}", post.deleted_as.as_deref().map(|a| format!(" by {a}")).unwrap_or_default()))));
+            .when(post.deleted, |d| {
+                d.child(
+                    div().text_color(t.colors.red).child(format!("· Deleted{}", post.deleted_as.as_deref().map(|a| format!(" by {a}")).unwrap_or_default())),
+                )
+            });
 
-        let mut body = div().flex().flex_col().gap(px(12.)).child(header).child(
-            div()
-                .text_size(t.fs.xxl - px(3.))
-                .font_weight(FontWeight::BOLD)
-                .text_color(t.colors.text)
-                .line_height(px(30.))
-                .child(post.title.clone()),
-        );
+        let mut body =
+            div().flex().flex_col().gap(px(12.)).child(header).child(
+                div().text_size(t.fs.xxl - px(3.)).font_weight(FontWeight::BOLD).text_color(t.colors.text).line_height(px(30.)).child(post.title.clone()),
+            );
 
         match post.kind {
             PostType::Link => {
@@ -443,10 +458,12 @@ impl PostView {
                     div()
                         .flex()
                         .gap(px(4.))
-                        .child(ui::button_clear("post-share", cx).child(icons::icon(Icon::Link, t.colors.text_light)).child("Copy link").on_click(move |_, _, cx| {
-                            cx.write_to_clipboard(ClipboardItem::new_string(web.clone()));
-                            nav::toast("Link copied", cx);
-                        }))
+                        .child(ui::button_clear("post-share", cx).child(icons::icon(Icon::Link, t.colors.text_light)).child("Copy link").on_click(
+                            move |_, _, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(web.clone()));
+                                nav::toast("Link copied", cx);
+                            },
+                        ))
                         .child(ui::menu_button("post-menu", move |cx| actions::post_menu(&menu_post, cx), cx)),
                 ),
         );
@@ -523,8 +540,21 @@ impl PostView {
                                 })))
                             })
                             .child(
-                                ui::disabled(ui::button_main(SharedString::from(format!("{id}-send")), if composer.busy { "Sending…" } else if parent.is_some() { "Reply" } else { "Comment" }, cx), composer.busy)
-                                    .on_click(cx.listener(move |this, _, _, cx| this.submit_comment(parent.clone(), cx))),
+                                ui::disabled(
+                                    ui::button_main(
+                                        SharedString::from(format!("{id}-send")),
+                                        if composer.busy {
+                                            "Sending…"
+                                        } else if parent.is_some() {
+                                            "Reply"
+                                        } else {
+                                            "Comment"
+                                        },
+                                        cx,
+                                    ),
+                                    composer.busy,
+                                )
+                                .on_click(cx.listener(move |this, _, _, cx| this.submit_comment(parent.clone(), cx))),
                             ),
                     ),
             )
@@ -551,12 +581,7 @@ impl PostView {
                     .items_center()
                     .justify_between()
                     .child(div().text_color(t.colors.text_light).child("Log in to join the conversation."))
-                    .child(
-                        div()
-                            .flex()
-                            .gap(px(8.))
-                            .child(ui::button_main("c-login", "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx))),
-                    ),
+                    .child(div().flex().gap(px(8.)).child(ui::button_main("c-login", "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx)))),
             );
         }
         section
@@ -583,32 +608,32 @@ impl PostView {
         let brand = t.colors.brand;
 
         // One guide per ancestor; clicking a guide collapses that ancestor's thread.
-        let guides = ancestors.iter().take(MAX_VISUAL_LEVEL).enumerate().map(|(depth, ancestor)| {
-            let target = ancestor.clone();
-            div()
-                .id(SharedString::from(format!("g-{id}-{depth}")))
-                .w(px(GUIDE))
-                .flex_none()
-                .flex()
-                .justify_center()
-                .cursor_pointer()
-                .child(div().w(px(2.)).h_full().bg(line))
-                .hover(move |s| s.bg(brand.opacity(0.10)))
-                .on_click(cx.listener(move |this, _, _, cx| this.toggle_collapse(target.clone(), cx)))
-                .into_any_element()
-        }).collect::<Vec<_>>();
+        let guides = ancestors
+            .iter()
+            .take(MAX_VISUAL_LEVEL)
+            .enumerate()
+            .map(|(depth, ancestor)| {
+                let target = ancestor.clone();
+                div()
+                    .id(SharedString::from(format!("g-{id}-{depth}")))
+                    .w(px(GUIDE))
+                    .flex_none()
+                    .flex()
+                    .justify_center()
+                    .cursor_pointer()
+                    .child(div().w(px(2.)).h_full().bg(line))
+                    .hover(move |s| s.bg(brand.opacity(0.10)))
+                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_collapse(target.clone(), cx)))
+                    .into_any_element()
+            })
+            .collect::<Vec<_>>();
 
         // Avatar column, with this comment's own line running down to its replies.
         let pro_pic = c.author.as_ref().and_then(|a| a.pro_pic.as_ref()).map(|i| i.best_url(40).to_string());
         let own_id = id.clone();
-        let avatar_col = div()
-            .w(px(GUIDE))
-            .flex_none()
-            .flex()
-            .flex_col()
-            .items_center()
-            .child(ui::avatar(pro_pic.as_deref(), &c.username, px(22.), cx))
-            .when(has_visible_children, |d| {
+        let avatar_col = div().w(px(GUIDE)).flex_none().flex().flex_col().items_center().child(ui::avatar(pro_pic.as_deref(), &c.username, px(22.), cx)).when(
+            has_visible_children,
+            |d| {
                 d.child(
                     div()
                         .id(SharedString::from(format!("rail-{id}")))
@@ -622,7 +647,8 @@ impl PostView {
                         .hover(move |s| s.bg(brand.opacity(0.10)))
                         .on_click(cx.listener(move |this, _, _, cx| this.toggle_collapse(own_id.clone(), cx))),
                 )
-            });
+            },
+        );
 
         let username = c.username.clone();
         let deleted_author = c.user_deleted || (c.deleted && c.username.is_empty());
@@ -662,7 +688,15 @@ impl PostView {
             .when(c.locked, |d| d.child(icons::sized(Icon::Lock, px(12.), t.colors.red)))
             .when(row.collapsed, |d| {
                 d.child("·").child(ui::plural(c.points(), "point")).when(c.no_replies > 0, |d| {
-                    d.child(div().px(px(6.)).rounded(px(8.)).bg(t.colors.input).text_size(t.fs.xs).font_weight(FontWeight::SEMIBOLD).child(format!("+{}", c.no_replies)))
+                    d.child(
+                        div()
+                            .px(px(6.))
+                            .rounded(px(8.))
+                            .bg(t.colors.input)
+                            .text_size(t.fs.xs)
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("+{}", c.no_replies)),
+                    )
                 })
             })
             // Clicking the header (not the name) collapses or expands, like the web client.
@@ -696,7 +730,11 @@ impl PostView {
                     .text_color(t.colors.text_light)
                     // Quiet until the comment is hovered (or a vote is set / a reply is open).
                     .when(c.vote().is_none() && !replying_here, |d| d.opacity(0.65).group_hover(group.clone(), |s| s.opacity(1.)))
-                    .child(vote_pill(format!("cv-{id}"), c.points(), c.vote(), move |up, cx| actions::vote_comment(&vote_c, up, cx), cx).bg(gpui::transparent_black()).text_size(t.fs.s))
+                    .child(
+                        vote_pill(format!("cv-{id}"), c.points(), c.vote(), move |up, cx| actions::vote_comment(&vote_c, up, cx), cx)
+                            .bg(gpui::transparent_black())
+                            .text_size(t.fs.s),
+                    )
                     .when(can_reply, |d| {
                         d.child(
                             ui::button_clear(SharedString::from(format!("reply-{id}")), cx)
@@ -712,11 +750,11 @@ impl PostView {
                     .child(ui::menu_button(SharedString::from(format!("cm-{id}")), move |cx| actions::comment_menu(&menu_c, &community_id, cx), cx).py(px(3.))),
             );
 
-            if let Some((reply_to, composer)) = &self.reply {
-                if reply_to == &id {
-                    let composer = self.render_composer(composer, &format!("r-{id}"), Some(id.clone()), cx);
-                    content = content.child(div().pt(px(4.)).pb(px(6.)).child(composer));
-                }
+            if let Some((reply_to, composer)) = &self.reply
+                && reply_to == &id
+            {
+                let composer = self.render_composer(composer, &format!("r-{id}"), Some(id.clone()), cx);
+                content = content.child(div().pt(px(4.)).pb(px(6.)).child(composer));
             }
 
             if row.unloaded_replies > 0 {
@@ -753,15 +791,7 @@ impl PostView {
             .px(px(14.))
             .flex()
             .children(guides)
-            .child(
-                div()
-                    .flex()
-                    .flex_1()
-                    .min_w_0()
-                    .gap(px(8.))
-                    .child(avatar_col)
-                    .child(content),
-            )
+            .child(div().flex().flex_1().min_w_0().gap(px(8.)).child(avatar_col).child(content))
             .into_any_element()
     }
 

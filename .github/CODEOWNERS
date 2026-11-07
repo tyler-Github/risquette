@@ -1,0 +1,17 @@
+# Changes to these paths need the owner's review before they can merge
+# (enforced by the main branch ruleset). Everything else can be approved
+# by any collaborator with write access.
+
+# CI, release pipeline, templates and repository config
+/.github/                         @tyler-Github
+
+# Release packaging and the installer, updater and uninstaller
+/scripts/package.ps1              @tyler-Github
+/crates/risquette-installer/      @tyler-Github
+/crates/risquette/src/updater.rs  @tyler-Github
+/crates/risquette/build.rs        @tyler-Github
+
+# Dependencies and the licence
+/Cargo.toml                       @tyler-Github
+/Cargo.lock                       @tyler-Github
+/LICENSE                          @tyler-Github

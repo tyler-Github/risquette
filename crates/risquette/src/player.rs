@@ -2,10 +2,10 @@
 //! Windows, WebKit elsewhere) with the provider's embedded player.
 
 use crate::{embed::Player, icons::Icon, ui};
-use gpui::{div, prelude::*, px, size, App, AppContext, Bounds, Context, Pixels, SharedString, Size, TitlebarOptions, Window, WindowBounds, WindowOptions};
-use wry::raw_window_handle::HasWindowHandle as _;
+use gpui::{App, AppContext, Bounds, Context, Pixels, SharedString, Size, TitlebarOptions, Window, WindowBounds, WindowOptions, div, prelude::*, px, size};
 use risquette_theme::ActiveTheme;
-use wry::{dpi, Rect, WebContext, WebView, WebViewBuilder};
+use wry::raw_window_handle::HasWindowHandle as _;
+use wry::{Rect, WebContext, WebView, WebViewBuilder, dpi};
 
 pub struct PlayerView {
     webview: Option<WebView>,
@@ -167,16 +167,15 @@ fn rect(viewport: Size<Pixels>) -> Rect {
     }
 }
 
-
 impl Render for PlayerView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let viewport = window.viewport_size();
-        if let Some(webview) = &self.webview {
-            if self.last_size != Some(viewport) {
-                self.last_size = Some(viewport);
-                if let Err(e) = webview.set_bounds(rect(viewport)) {
-                    log::warn!("resize web view: {e}");
-                }
+        if let Some(webview) = &self.webview
+            && self.last_size != Some(viewport)
+        {
+            self.last_size = Some(viewport);
+            if let Err(e) = webview.set_bounds(rect(viewport)) {
+                log::warn!("resize web view: {e}");
             }
         }
         let t = *cx.theme();
@@ -192,24 +191,23 @@ impl Render for PlayerView {
     }
 }
 
-
 /// The Windows player: a plain Win32 window (no GPUI rendering) with WebView2
 /// filling its client area. GPUI's message loop dispatches its messages.
 #[cfg(target_os = "windows")]
 mod native {
-    use super::{player_page, Player, PLAYER_PAGE};
+    use super::{PLAYER_PAGE, Player, player_page};
     use gpui::App;
     use std::{cell::RefCell, collections::HashMap, num::NonZeroIsize};
     use windows::{
-        core::{w, HSTRING, PCWSTR},
         Win32::{
             Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-            Graphics::Gdi::{GetStockObject, HBRUSH, BLACK_BRUSH},
+            Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH},
             System::LibraryLoader::GetModuleHandleW,
             UI::{HiDpi::GetDpiForSystem, WindowsAndMessaging::*},
         },
+        core::{HSTRING, PCWSTR, w},
     };
-    use wry::{dpi, raw_window_handle as rwh, Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows};
+    use wry::{Rect, WebContext, WebView, WebViewBuilder, WebViewBuilderExtWindows, dpi, raw_window_handle as rwh};
 
     const CLASS: PCWSTR = w!("RisquettePlayer");
 
@@ -223,7 +221,7 @@ mod native {
 
     impl rwh::HasWindowHandle for Handle {
         fn window_handle(&self) -> Result<rwh::WindowHandle<'_>, rwh::HandleError> {
-            let hwnd = NonZeroIsize::new(self.0 .0 as isize).ok_or(rwh::HandleError::Unavailable)?;
+            let hwnd = NonZeroIsize::new(self.0.0 as isize).ok_or(rwh::HandleError::Unavailable)?;
             let raw = rwh::RawWindowHandle::Win32(rwh::Win32WindowHandle::new(hwnd));
             // SAFETY: the window lives until WM_DESTROY, after which the web view is dropped.
             Ok(unsafe { rwh::WindowHandle::borrow_raw(raw) })
@@ -245,10 +243,10 @@ mod native {
         match msg {
             WM_SIZE => {
                 PLAYERS.with(|p| {
-                    if let Ok(p) = p.try_borrow() {
-                        if let Some((webview, _)) = p.get(&(hwnd.0 as isize)) {
-                            let _ = webview.set_bounds(client_rect(hwnd));
-                        }
+                    if let Ok(p) = p.try_borrow()
+                        && let Some((webview, _)) = p.get(&(hwnd.0 as isize))
+                    {
+                        let _ = webview.set_bounds(client_rect(hwnd));
                     }
                 });
                 LRESULT(0)

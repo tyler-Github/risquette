@@ -10,7 +10,7 @@ use crate::{
     ui,
 };
 use discuit_api::{Community, CommunityRule, Post, Report, ReportDetails, User, UserGroup};
-use gpui::{div, prelude::*, px, App, Context, Entity, FontWeight, PathPromptOptions, SharedString, Task, WeakEntity, Window};
+use gpui::{App, Context, Entity, FontWeight, PathPromptOptions, SharedString, Task, WeakEntity, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -100,13 +100,17 @@ impl ModToolsView {
             _tasks: Vec::new(),
         };
         let name = this.name.clone();
-        this._tasks.push(api_view(cx, move |c| c.community_by_name(&name), |this, r, cx| match r {
-            Ok(c) => {
-                this.set_community(c, cx);
-                this.load_tab(cx);
-            }
-            Err(e) => this.error = Some(e.user_message().into()),
-        }));
+        this._tasks.push(api_view(
+            cx,
+            move |c| c.community_by_name(&name),
+            |this, r, cx| match r {
+                Ok(c) => {
+                    this.set_community(c, cx);
+                    this.load_tab(cx);
+                }
+                Err(e) => this.error = Some(e.user_message().into()),
+            },
+        ));
         this
     }
 
@@ -143,53 +147,73 @@ impl ModToolsView {
                 self.loading = false;
                 return;
             }
-            Tab::Rules => api_view(cx, move |c| c.rules(&id), |this, r, _| {
-                this.loading = false;
-                match r {
-                    Ok(v) => this.rules = v,
-                    Err(e) => this.error = Some(e.user_message().into()),
-                }
-            }),
-            Tab::Mods => api_view(cx, move |c| c.mods(&id), |this, r, _| {
-                this.loading = false;
-                match r {
-                    Ok(v) => this.mods = v,
-                    Err(e) => this.error = Some(e.user_message().into()),
-                }
-            }),
-            Tab::Banned => api_view(cx, move |c| c.banned(&id), |this, r, _| {
-                this.loading = false;
-                match r {
-                    Ok(v) => this.banned = v,
-                    Err(e) => this.error = Some(e.user_message().into()),
-                }
-            }),
-            Tab::Reports => {
-                let (filter, page) = (self.report_filter, self.report_page);
-                api_view(cx, move |c| c.reports(&id, filter, page, 20), |this, r, _| {
+            Tab::Rules => api_view(
+                cx,
+                move |c| c.rules(&id),
+                |this, r, _| {
                     this.loading = false;
                     match r {
-                        Ok(p) => {
-                            this.reports = p.reports.unwrap_or_default();
-                            this.report_details = p.details;
-                        }
+                        Ok(v) => this.rules = v,
                         Err(e) => this.error = Some(e.user_message().into()),
                     }
-                })
+                },
+            ),
+            Tab::Mods => api_view(
+                cx,
+                move |c| c.mods(&id),
+                |this, r, _| {
+                    this.loading = false;
+                    match r {
+                        Ok(v) => this.mods = v,
+                        Err(e) => this.error = Some(e.user_message().into()),
+                    }
+                },
+            ),
+            Tab::Banned => api_view(
+                cx,
+                move |c| c.banned(&id),
+                |this, r, _| {
+                    this.loading = false;
+                    match r {
+                        Ok(v) => this.banned = v,
+                        Err(e) => this.error = Some(e.user_message().into()),
+                    }
+                },
+            ),
+            Tab::Reports => {
+                let (filter, page) = (self.report_filter, self.report_page);
+                api_view(
+                    cx,
+                    move |c| c.reports(&id, filter, page, 20),
+                    |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                this.reports = p.reports.unwrap_or_default();
+                                this.report_details = p.details;
+                            }
+                            Err(e) => this.error = Some(e.user_message().into()),
+                        }
+                    },
+                )
             }
             Tab::Removed | Tab::Locked => {
                 let filter = if self.tab == Tab::Removed { "deleted" } else { "locked" };
                 let page = self.posts_page;
-                api_view(cx, move |c| c.mod_feed(&id, filter, page, 20), |this, r, _| {
-                    this.loading = false;
-                    match r {
-                        Ok(p) => {
-                            this.posts = p.posts.unwrap_or_default();
-                            this.posts_total = p.no_posts;
+                api_view(
+                    cx,
+                    move |c| c.mod_feed(&id, filter, page, 20),
+                    |this, r, _| {
+                        this.loading = false;
+                        match r {
+                            Ok(p) => {
+                                this.posts = p.posts.unwrap_or_default();
+                                this.posts_total = p.no_posts;
+                            }
+                            Err(e) => this.error = Some(e.user_message().into()),
                         }
-                        Err(e) => this.error = Some(e.user_message().into()),
-                    }
-                })
+                    },
+                )
             }
         };
         self._tasks.push(task);
@@ -198,24 +222,33 @@ impl ModToolsView {
     fn save_settings(&mut self, cx: &mut Context<Self>) {
         let Some(id) = self.id() else { return };
         let (about, nsfw, restricted) = (self.about.read(cx).text().to_string(), self.nsfw, self.restricted);
-        self._tasks.push(api_view(cx, move |c| c.update_community(&id, nsfw, &about, restricted), |this, r, cx| match r {
-            Ok(c) => {
-                let mut merged = c;
-                if let Some(old) = &this.community {
-                    merged.mods = merged.mods.or(old.mods.clone());
-                    merged.rules = merged.rules.or(old.rules.clone());
+        self._tasks.push(api_view(
+            cx,
+            move |c| c.update_community(&id, nsfw, &about, restricted),
+            |this, r, cx| match r {
+                Ok(c) => {
+                    let mut merged = c;
+                    if let Some(old) = &this.community {
+                        merged.mods = merged.mods.or(old.mods.clone());
+                        merged.rules = merged.rules.or(old.rules.clone());
+                    }
+                    this.set_community(merged.clone(), cx);
+                    crate::bus::emit(crate::bus::ContentEvent::CommunityUpdated(Box::new(merged)), cx);
+                    this.status = Some("Saved.".into());
                 }
-                this.set_community(merged.clone(), cx);
-                crate::bus::emit(crate::bus::ContentEvent::CommunityUpdated(Box::new(merged)), cx);
-                this.status = Some("Saved.".into());
-            }
-            Err(e) => this.status = Some(e.user_message().into()),
-        }));
+                Err(e) => this.status = Some(e.user_message().into()),
+            },
+        ));
     }
 
     fn upload_image(&mut self, banner: bool, cx: &mut Context<Self>) {
         let Some(id) = self.id() else { return };
-        let paths = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: Some(if banner { "Choose a banner" } else { "Choose a community icon" }.into()) });
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: true,
+            directories: false,
+            multiple: false,
+            prompt: Some(if banner { "Choose a banner" } else { "Choose a community icon" }.into()),
+        });
         self._tasks.push(cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else { return };
             let Some(path) = paths.into_iter().next() else { return };
@@ -245,13 +278,17 @@ impl ModToolsView {
 
     fn remove_image(&mut self, banner: bool, cx: &mut Context<Self>) {
         let Some(id) = self.id() else { return };
-        self._tasks.push(api_view(cx, move |c| if banner { c.delete_community_banner(&id) } else { c.delete_community_pro_pic(&id) }, |this, r, _| match r {
-            Ok(c) => {
-                this.community = Some(c);
-                this.status = Some("Image removed.".into());
-            }
-            Err(e) => this.status = Some(e.user_message().into()),
-        }));
+        self._tasks.push(api_view(
+            cx,
+            move |c| if banner { c.delete_community_banner(&id) } else { c.delete_community_pro_pic(&id) },
+            |this, r, _| match r {
+                Ok(c) => {
+                    this.community = Some(c);
+                    this.status = Some("Image removed.".into());
+                }
+                Err(e) => this.status = Some(e.user_message().into()),
+            },
+        ));
     }
 
     fn reload_after(entity: WeakEntity<Self>, cx: &mut App) {
@@ -275,7 +312,12 @@ impl ModToolsView {
                 this.restricted = !this.restricted;
                 cx.notify();
             })))
-            .child(div().flex().justify_end().child(ui::button_main("mt-save", "Save settings", cx).on_click(cx.listener(|this, _, _, cx| this.save_settings(cx)))))
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .child(ui::button_main("mt-save", "Save settings", cx).on_click(cx.listener(|this, _, _, cx| this.save_settings(cx)))),
+            )
             .child(div().h(px(1.)).bg(t.colors.separator))
             .child(
                 div()
@@ -284,7 +326,9 @@ impl ModToolsView {
                     .gap(px(10.))
                     .child(ui::avatar(pic.as_deref(), &c.name, px(48.), cx))
                     .child(ui::button_with_icon("mt-pic", Icon::Upload, "Upload icon", cx).on_click(cx.listener(|this, _, _, cx| this.upload_image(false, cx))))
-                    .when(c.pro_pic.is_some(), |d| d.child(ui::button("mt-rmpic", "Remove icon", cx).on_click(cx.listener(|this, _, _, cx| this.remove_image(false, cx))))),
+                    .when(c.pro_pic.is_some(), |d| {
+                        d.child(ui::button("mt-rmpic", "Remove icon", cx).on_click(cx.listener(|this, _, _, cx| this.remove_image(false, cx))))
+                    }),
             )
             .child(
                 div()
@@ -292,8 +336,13 @@ impl ModToolsView {
                     .items_center()
                     .gap(px(10.))
                     .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(if c.banner_image.is_some() { "Banner set" } else { "No banner" }))
-                    .child(ui::button_with_icon("mt-banner", Icon::Upload, "Upload banner", cx).on_click(cx.listener(|this, _, _, cx| this.upload_image(true, cx))))
-                    .when(c.banner_image.is_some(), |d| d.child(ui::button("mt-rmbanner", "Remove banner", cx).on_click(cx.listener(|this, _, _, cx| this.remove_image(true, cx))))),
+                    .child(
+                        ui::button_with_icon("mt-banner", Icon::Upload, "Upload banner", cx)
+                            .on_click(cx.listener(|this, _, _, cx| this.upload_image(true, cx))),
+                    )
+                    .when(c.banner_image.is_some(), |d| {
+                        d.child(ui::button("mt-rmbanner", "Remove banner", cx).on_click(cx.listener(|this, _, _, cx| this.remove_image(true, cx))))
+                    }),
             )
     }
 
@@ -355,13 +404,23 @@ impl ModToolsView {
                     }))
                     .child(ui::button(("mt-dr", ix), "Delete", cx).on_click(move |_, _, cx| {
                         let (id, me) = (did.clone(), dme.clone());
-                        modals::confirm("Delete rule?", "", "Delete", move |cx| {
-                            let (id, me) = (id.clone(), me.clone());
-                            api(cx, move |c| c.delete_rule(&id, rid), move |r, cx| match r {
-                                Ok(_) => Self::reload_after(me, cx),
-                                Err(e) => nav::toast(e.user_message(), cx),
-                            });
-                        }, cx);
+                        modals::confirm(
+                            "Delete rule?",
+                            "",
+                            "Delete",
+                            move |cx| {
+                                let (id, me) = (id.clone(), me.clone());
+                                api(
+                                    cx,
+                                    move |c| c.delete_rule(&id, rid),
+                                    move |r, cx| match r {
+                                        Ok(_) => Self::reload_after(me, cx),
+                                        Err(e) => nav::toast(e.user_message(), cx),
+                                    },
+                                );
+                            },
+                            cx,
+                        );
                     })),
             );
         }
@@ -371,7 +430,13 @@ impl ModToolsView {
         out
     }
 
-    fn user_rows(&self, users: &[User], action_label: &'static str, on_action: impl Fn(String, &mut App) + Clone + 'static, cx: &mut Context<Self>) -> gpui::Div {
+    fn user_rows(
+        &self,
+        users: &[User],
+        action_label: &'static str,
+        on_action: impl Fn(String, &mut App) + Clone + 'static,
+        cx: &mut Context<Self>,
+    ) -> gpui::Div {
         let t = *cx.theme();
         let mut out = div().flex().flex_col().gap(px(6.));
         for (ix, u) in users.iter().enumerate() {
@@ -407,16 +472,31 @@ impl ModToolsView {
         let id = self.id().unwrap_or_default();
         let me = cx.entity().downgrade();
         let (add_id, add_me) = (id.clone(), me.clone());
-        let rows = self.user_rows(&self.mods.clone(), "Remove", move |name, cx| {
-            let (id, me) = (id.clone(), me.clone());
-            modals::confirm(format!("Remove @{name} as moderator?"), "", "Remove", move |cx| {
-                let (id, me, name) = (id.clone(), me.clone(), name.clone());
-                api(cx, move |c| c.remove_mod(&id, &name), move |r, cx| match r {
-                    Ok(_) => Self::reload_after(me, cx),
-                    Err(e) => nav::toast(e.user_message(), cx),
-                });
-            }, cx);
-        }, cx);
+        let rows = self.user_rows(
+            &self.mods.clone(),
+            "Remove",
+            move |name, cx| {
+                let (id, me) = (id.clone(), me.clone());
+                modals::confirm(
+                    format!("Remove @{name} as moderator?"),
+                    "",
+                    "Remove",
+                    move |cx| {
+                        let (id, me, name) = (id.clone(), me.clone(), name.clone());
+                        api(
+                            cx,
+                            move |c| c.remove_mod(&id, &name),
+                            move |r, cx| match r {
+                                Ok(_) => Self::reload_after(me, cx),
+                                Err(e) => nav::toast(e.user_message(), cx),
+                            },
+                        );
+                    },
+                    cx,
+                );
+            },
+            cx,
+        );
         div()
             .flex()
             .flex_col()
@@ -442,13 +522,22 @@ impl ModToolsView {
         let id = self.id().unwrap_or_default();
         let me = cx.entity().downgrade();
         let (add_id, add_me) = (id.clone(), me.clone());
-        let rows = self.user_rows(&self.banned.clone(), "Unban", move |name, cx| {
-            let (id, me) = (id.clone(), me.clone());
-            api(cx, move |c| c.unban_from_community(&id, &name), move |r, cx| match r {
-                Ok(_) => Self::reload_after(me, cx),
-                Err(e) => nav::toast(e.user_message(), cx),
-            });
-        }, cx);
+        let rows = self.user_rows(
+            &self.banned.clone(),
+            "Unban",
+            move |name, cx| {
+                let (id, me) = (id.clone(), me.clone());
+                api(
+                    cx,
+                    move |c| c.unban_from_community(&id, &name),
+                    move |r, cx| match r {
+                        Ok(_) => Self::reload_after(me, cx),
+                        Err(e) => nav::toast(e.user_message(), cx),
+                    },
+                );
+            },
+            cx,
+        );
         div()
             .flex()
             .flex_col()
@@ -479,11 +568,13 @@ impl ModToolsView {
         let me = cx.entity().downgrade();
         let d = &self.report_details;
         let filter_tab = |f: &'static str, label: String, this: &Self, cx: &mut Context<Self>| {
-            ui::selected(ui::button_clear(SharedString::from(format!("rf-{f}")), cx), this.report_filter == f, cx).child(label).on_click(cx.listener(move |this, _, _, cx| {
-                this.report_filter = f;
-                this.report_page = 1;
-                this.load_tab(cx);
-            }))
+            ui::selected(ui::button_clear(SharedString::from(format!("rf-{f}")), cx), this.report_filter == f, cx).child(label).on_click(cx.listener(
+                move |this, _, _, cx| {
+                    this.report_filter = f;
+                    this.report_page = 1;
+                    this.load_tab(cx);
+                },
+            ))
         };
         let mut out = div().flex().flex_col().gap(px(8.)).child(
             div()
@@ -518,7 +609,13 @@ impl ModToolsView {
                             .child(div().text_color(t.colors.red).font_weight(FontWeight::SEMIBOLD).child(r.reason.clone().unwrap_or_else(|| "Report".into())))
                             .child(format!("· {} by @{author}", if is_post { "post" } else { "comment" }))
                             .when_some(r.created_at, |d, at| d.child(format!("· {}", ui::time_ago(at))))
-                            .when(r.dealt_at.is_some(), |d| d.child(div().text_color(t.colors.green).child(format!("· handled{}", r.action_taken.clone().map(|a| format!(" ({a})")).unwrap_or_default())))),
+                            .when(r.dealt_at.is_some(), |d| {
+                                d.child(
+                                    div()
+                                        .text_color(t.colors.green)
+                                        .child(format!("· handled{}", r.action_taken.clone().map(|a| format!(" ({a})")).unwrap_or_default())),
+                                )
+                            }),
                     )
                     .child(div().line_clamp(3).child(crate::markdown::plain_preview(&text, 300)))
                     .when_some(r.description.clone().filter(|d| !d.is_empty()), |d, desc| d.child(div().text_size(t.fs.s).italic().child(desc)))
@@ -526,34 +623,46 @@ impl ModToolsView {
                         div()
                             .flex()
                             .gap(px(6.))
-                            .when_some(public_id, |d, pid| d.child(ui::button(("rp-open", ix), "Open", cx).on_click(move |_, _, cx| nav::go(Target::Post { public_id: pid.clone() }, cx))))
+                            .when_some(public_id, |d, pid| {
+                                d.child(ui::button(("rp-open", ix), "Open", cx).on_click(move |_, _, cx| nav::go(Target::Post { public_id: pid.clone() }, cx)))
+                            })
                             .child(ui::button(("rp-dismiss", ix), "Dismiss", cx).on_click(move |_, _, cx| {
                                 let (id, me) = (dismiss_id.clone(), dismiss_me.clone());
-                                api(cx, move |c| c.delete_report(&id, report_id), move |r, cx| match r {
-                                    Ok(_) => Self::reload_after(me, cx),
-                                    Err(e) => nav::toast(e.user_message(), cx),
-                                });
+                                api(
+                                    cx,
+                                    move |c| c.delete_report(&id, report_id),
+                                    move |r, cx| match r {
+                                        Ok(_) => Self::reload_after(me, cx),
+                                        Err(e) => nav::toast(e.user_message(), cx),
+                                    },
+                                );
                             }))
                             .child(ui::button_danger(("rp-remove", ix), "Remove content", cx).on_click(move |_, _, cx| {
                                 let (id, me, target_id, pid) = (rm_id.clone(), rm_me.clone(), target_id.clone(), remove_pid.clone());
-                                modals::confirm("Remove this content?", "It will be removed as a moderator and the report resolved.", "Remove", move |cx| {
-                                    let (id, me, pid, target_id) = (id.clone(), me.clone(), pid.clone(), target_id.clone());
-                                    api(
-                                        cx,
-                                        move |c| {
-                                            if is_post {
-                                                c.delete_post(&pid, UserGroup::Mods, false).map(|_| ())?;
-                                            } else {
-                                                c.delete_comment(&pid, &target_id, UserGroup::Mods).map(|_| ())?;
-                                            }
-                                            c.delete_report(&id, report_id).map(|_| ())
-                                        },
-                                        move |r, cx| match r {
-                                            Ok(()) => Self::reload_after(me, cx),
-                                            Err(e) => nav::toast(e.user_message(), cx),
-                                        },
-                                    );
-                                }, cx);
+                                modals::confirm(
+                                    "Remove this content?",
+                                    "It will be removed as a moderator and the report resolved.",
+                                    "Remove",
+                                    move |cx| {
+                                        let (id, me, pid, target_id) = (id.clone(), me.clone(), pid.clone(), target_id.clone());
+                                        api(
+                                            cx,
+                                            move |c| {
+                                                if is_post {
+                                                    c.delete_post(&pid, UserGroup::Mods, false).map(|_| ())?;
+                                                } else {
+                                                    c.delete_comment(&pid, &target_id, UserGroup::Mods).map(|_| ())?;
+                                                }
+                                                c.delete_report(&id, report_id).map(|_| ())
+                                            },
+                                            move |r, cx| match r {
+                                                Ok(()) => Self::reload_after(me, cx),
+                                                Err(e) => nav::toast(e.user_message(), cx),
+                                            },
+                                        );
+                                    },
+                                    cx,
+                                );
                             })),
                     ),
             );
@@ -571,13 +680,21 @@ impl ModToolsView {
             .gap(px(8.))
             .when(page > 1, |d| {
                 d.child(ui::button_with_icon("pg-prev", Icon::ChevronLeft, "Previous", cx).on_click(cx.listener(move |this, _, _, cx| {
-                    if reports { this.report_page -= 1 } else { this.posts_page -= 1 }
+                    if reports {
+                        this.report_page -= 1
+                    } else {
+                        this.posts_page -= 1
+                    }
                     this.load_tab(cx);
                 })))
             })
             .when(has_more, |d| {
                 d.child(ui::button_with_icon("pg-next", Icon::ChevronRight, "Next", cx).on_click(cx.listener(move |this, _, _, cx| {
-                    if reports { this.report_page += 1 } else { this.posts_page += 1 }
+                    if reports {
+                        this.report_page += 1
+                    } else {
+                        this.posts_page += 1
+                    }
                     this.load_tab(cx);
                 })))
             })
@@ -585,7 +702,8 @@ impl ModToolsView {
 
     fn render_posts(&mut self, cx: &mut Context<Self>) -> gpui::Div {
         let t = *cx.theme();
-        let mut out = div().flex().flex_col().gap(px(6.)).child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!("{} total", self.posts_total)));
+        let mut out =
+            div().flex().flex_col().gap(px(6.)).child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(format!("{} total", self.posts_total)));
         for (ix, p) in self.posts.clone().into_iter().enumerate() {
             let pid = p.public_id.clone();
             let locked = self.tab == Tab::Locked;
@@ -599,22 +717,26 @@ impl ModToolsView {
                     .items_center()
                     .gap(px(10.))
                     .cursor_pointer()
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_col()
-                            .child(div().font_weight(FontWeight::SEMIBOLD).child(p.title.clone()))
-                            .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("by @{} · {}{}", p.username, ui::time_ago(p.created_at), p.deleted_as.clone().map(|a| format!(" · removed by {a}")).unwrap_or_default()))),
-                    )
+                    .child(div().flex_1().flex().flex_col().child(div().font_weight(FontWeight::SEMIBOLD).child(p.title.clone())).child(
+                        div().text_size(t.fs.xs).text_color(t.colors.text_light).child(format!(
+                            "by @{} · {}{}",
+                            p.username,
+                            ui::time_ago(p.created_at),
+                            p.deleted_as.clone().map(|a| format!(" · removed by {a}")).unwrap_or_default()
+                        )),
+                    ))
                     .when(locked, |d| {
                         d.child(ui::button(("mt-unlock", ix), "Unlock", cx).on_click(move |_, _, cx| {
                             cx.stop_propagation();
                             let (pid, me) = (unlock.public_id.clone(), me.clone());
-                            api(cx, move |c| c.post_action(&pid, discuit_api::PostAction::Unlock), move |r, cx| match r {
-                                Ok(_) => Self::reload_after(me, cx),
-                                Err(e) => nav::toast(e.user_message(), cx),
-                            });
+                            api(
+                                cx,
+                                move |c| c.post_action(&pid, discuit_api::PostAction::Unlock),
+                                move |r, cx| match r {
+                                    Ok(_) => Self::reload_after(me, cx),
+                                    Err(e) => nav::toast(e.user_message(), cx),
+                                },
+                            );
                         }))
                     })
                     .on_click(move |_, _, cx| nav::go(Target::Post { public_id: pid.clone() }, cx)),
@@ -668,7 +790,12 @@ impl Render for ModToolsView {
                         .flex()
                         .flex_col()
                         .gap(px(2.))
-                        .child(ui::button_with_icon("mt-view", Icon::Compass, "View community", cx).w_full().mb(px(8.)).on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)))
+                        .child(
+                            ui::button_with_icon("mt-view", Icon::Compass, "View community", cx)
+                                .w_full()
+                                .mb(px(8.))
+                                .on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)),
+                        )
                         .children(Tab::ALL.map(|tab| {
                             let active = self.tab == tab;
                             let color = if active { t.colors.brand } else { t.colors.text_light };

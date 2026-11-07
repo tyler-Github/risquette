@@ -12,10 +12,7 @@ use crate::{
     storage, ui,
 };
 use discuit_api::{FeedItem, FeedQuery, FeedSort, FeedType, ListItem};
-use gpui::{
-    div, list, prelude::*, px, AnyElement, AnyView, Context, FontWeight, ListAlignment, ListState,
-    SharedString, Subscription, Task, Window,
-};
+use gpui::{AnyElement, AnyView, Context, FontWeight, ListAlignment, ListState, SharedString, Subscription, Task, Window, div, list, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 const PAGE_SIZE: u32 = 20;
@@ -60,10 +57,7 @@ impl FeedView {
                 weak.update(cx, |this, cx| this.load_more(cx)).ok();
             }
         });
-        let sort = storage::load()
-            .feed_sort
-            .and_then(|s| FeedSort::ALL.into_iter().find(|f| f.as_query() == s))
-            .unwrap_or_default();
+        let sort = storage::load().feed_sort.and_then(|s| FeedSort::ALL.into_iter().find(|f| f.as_query() == s)).unwrap_or_default();
 
         let mut subs = vec![cx.subscribe(&bus::entity(cx), |this, _, ev: &ContentEvent, cx| this.on_content(ev, cx))];
         let mut last_user = Session::get(cx).user().map(|u| u.id.clone());
@@ -274,10 +268,10 @@ impl FeedView {
         match ev {
             ContentEvent::PostUpdated(p) => {
                 for item in &mut self.items {
-                    if let FeedItem::Post(old) = item {
-                        if old.id == p.id {
-                            **old = crate::actions::merge_post((**p).clone(), old);
-                        }
+                    if let FeedItem::Post(old) = item
+                        && old.id == p.id
+                    {
+                        **old = crate::actions::merge_post((**p).clone(), old);
                     }
                 }
                 cx.notify();
@@ -295,23 +289,23 @@ impl FeedView {
             }
             ContentEvent::CommentAdded(c) => {
                 for item in &mut self.items {
-                    if let FeedItem::Post(p) = item {
-                        if p.id == c.post_id {
-                            p.no_comments += 1;
-                        }
+                    if let FeedItem::Post(p) = item
+                        && p.id == c.post_id
+                    {
+                        p.no_comments += 1;
                     }
                 }
                 cx.notify();
             }
             ContentEvent::CommentUpdated(c) => {
                 for item in &mut self.items {
-                    if let FeedItem::Comment(old) = item {
-                        if old.id == c.id {
-                            let author = old.author.clone();
-                            **old = (**c).clone();
-                            if old.author.is_none() {
-                                old.author = author;
-                            }
+                    if let FeedItem::Comment(old) = item
+                        && old.id == c.id
+                    {
+                        let author = old.author.clone();
+                        **old = (**c).clone();
+                        if old.author.is_none() {
+                            old.author = author;
                         }
                     }
                 }
@@ -329,17 +323,21 @@ impl FeedView {
     fn remove_from_list(&mut self, ix: usize, cx: &mut Context<Self>) {
         let Source::List(list_id) = self.source else { return };
         let Some(&item_id) = self.list_item_ids.get(ix) else { return };
-        self._load = Some(api_view(cx, move |c| c.delete_list_item(list_id, item_id), move |this, r, cx| match r {
-            Ok(_) => {
-                if let Some(pos) = this.list_item_ids.iter().position(|&i| i == item_id) {
-                    this.items.remove(pos);
-                    this.list_item_ids.remove(pos);
-                    let row = this.header_rows() + pos;
-                    this.list.splice(row..row + 1, 0);
+        self._load = Some(api_view(
+            cx,
+            move |c| c.delete_list_item(list_id, item_id),
+            move |this, r, cx| match r {
+                Ok(_) => {
+                    if let Some(pos) = this.list_item_ids.iter().position(|&i| i == item_id) {
+                        this.items.remove(pos);
+                        this.list_item_ids.remove(pos);
+                        let row = this.header_rows() + pos;
+                        this.list.splice(row..row + 1, 0);
+                    }
                 }
-            }
-            Err(e) => crate::nav::toast(e.user_message(), cx),
-        }));
+                Err(e) => crate::nav::toast(e.user_message(), cx),
+            },
+        ));
     }
 
     fn render_row(&mut self, ix: usize, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -361,17 +359,14 @@ impl FeedView {
                     div()
                         .relative()
                         .child(card)
-                        .child(
-                            div().absolute().top(px(10.)).right(px(10.)).child(
-                                ui::button_clear(("unsave", item_ix), cx)
-                                    .text_size(cx.theme().fs.s)
-                                    .child("Remove")
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        cx.stop_propagation();
-                                        this.remove_from_list(item_ix, cx);
-                                    })),
-                            ),
-                        )
+                        .child(div().absolute().top(px(10.)).right(px(10.)).child(
+                            ui::button_clear(("unsave", item_ix), cx).text_size(cx.theme().fs.s).child("Remove").on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    this.remove_from_list(item_ix, cx);
+                                },
+                            )),
+                        ))
                         .into_any_element()
                 } else {
                     card
@@ -418,7 +413,6 @@ impl FeedView {
                 .into_any_element()
         }
     }
-
 }
 
 impl Render for FeedView {
@@ -445,15 +439,25 @@ pub fn sort_control(feed: &gpui::Entity<FeedView>, cx: &gpui::App) -> Option<Any
     }
     let weak = feed.downgrade();
     Some(
-        sort_dropdown(f.effective_sort(), f.sort_options(), move |sort, cx| {
-            weak.update(cx, |f, cx| f.set_sort(sort, cx)).ok();
-        }, cx)
+        sort_dropdown(
+            f.effective_sort(),
+            f.sort_options(),
+            move |sort, cx| {
+                weak.update(cx, |f, cx| f.set_sort(sort, cx)).ok();
+            },
+            cx,
+        )
         .into_any_element(),
     )
 }
 
 /// "Hot v" — opens a menu of sort options.
-pub fn sort_dropdown(current: FeedSort, options: &'static [FeedSort], on_select: impl Fn(FeedSort, &mut gpui::App) + Clone + 'static, cx: &gpui::App) -> gpui::Stateful<gpui::Div> {
+pub fn sort_dropdown(
+    current: FeedSort,
+    options: &'static [FeedSort],
+    on_select: impl Fn(FeedSort, &mut gpui::App) + Clone + 'static,
+    cx: &gpui::App,
+) -> gpui::Stateful<gpui::Div> {
     let t = cx.theme();
     ui::button_clear("sort-dropdown", cx)
         .border_1()
