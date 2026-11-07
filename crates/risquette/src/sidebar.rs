@@ -210,11 +210,16 @@ impl Sidebar {
         let t = *cx.theme();
         let session = Session::get(cx);
         let Some(user) = session.user().cloned() else {
+            // Settings must stay reachable while logged out (theme, instance, updates…).
+            let settings = || ui::icon_button("sb-settings", Icon::Settings, "Settings", cx).on_click(|_, _, cx| nav::go(Target::Settings, cx));
             if self.rail {
                 return div()
                     .flex()
-                    .justify_center()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(4.))
                     .child(ui::icon_button("sb-login", Icon::LogIn, "Log in", cx).on_click(|_, _, cx| modals::open_login(cx)))
+                    .child(settings())
                     .into_any_element();
             }
             return div()
@@ -222,9 +227,16 @@ impl Sidebar {
                 .flex()
                 .flex_col()
                 .gap(px(8.))
-                .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child("Join the conversation on Discuit."))
-                .child(ui::button_main_with_icon("sb-login", Icon::LogIn, "Log in", cx).w_full().on_click(|_, _, cx| modals::open_login(cx)))
-                .child(ui::button("sb-signup", "Create account", cx).w_full().on_click(|_, _, cx| modals::open_signup(cx)))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(div().flex_1().min_w_0().text_size(t.fs.s).text_color(t.colors.text_light).child("Join the conversation on Discuit."))
+                        .child(settings()),
+                )
+                .child(ui::button_main_with_icon("sb-login", Icon::LogIn, "Log in", cx).justify_center().on_click(|_, _, cx| modals::open_login(cx)))
+                .child(ui::button("sb-signup", "Create account", cx).justify_center().on_click(|_, _, cx| modals::open_signup(cx)))
                 .into_any_element();
         };
         let pic = user.pro_pic.as_ref().map(|i| i.best_url(60).to_string());

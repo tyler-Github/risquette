@@ -174,7 +174,7 @@ impl Render for NotificationsView {
                     .flex()
                     .flex_col()
                     .gap(px(6.))
-                    .child(ui::button_with_icon("n-seen", Icon::MailCheck, "Mark all as read", cx).w_full().on_click(cx.listener(|_, _, _, cx| {
+                    .child(ui::button_with_icon("n-seen", Icon::MailCheck, "Mark all as read", cx).justify_center().on_click(cx.listener(|_, _, _, cx| {
                         let entity = cx.entity().downgrade();
                         api(
                             cx,
@@ -192,7 +192,7 @@ impl Render for NotificationsView {
                             },
                         );
                     })))
-                    .child(ui::button_with_icon("n-clear", Icon::Trash, "Delete all", cx).w_full().on_click(cx.listener(|_, _, _, cx| {
+                    .child(ui::button_with_icon("n-clear", Icon::Trash, "Delete all", cx).justify_center().on_click(cx.listener(|_, _, _, cx| {
                         let entity = cx.entity().downgrade();
                         modals::confirm(
                             "Delete all notifications?",

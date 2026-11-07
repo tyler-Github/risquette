@@ -355,7 +355,30 @@ impl SettingsView {
                     crate::storage::update(|s| s.videos_in_browser = !s.videos_in_browser);
                     cx.notify();
                 }),
-            ));
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(
+                        ui::checkbox("s-desktop-notify", stored.desktop_notifications, "Show Windows notifications", cx)
+                        .on_click(cx.listener(|_, _, _, cx| {
+                            crate::storage::update(|s| s.desktop_notifications = !s.desktop_notifications);
+                            crate::desktop::sync_tray(cx);
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        div()
+                            .pl(px(24.))
+                            .text_size(t.fs.s)
+                            .text_color(t.colors.text_light)
+                            .child(
+                                "For new replies, mentions and other notifications, while Risquette isn't the window you're using. While this is on, Risquette keeps an icon in the system tray.",
+                            ),
+                    ),
+            );
 
         // --- Updates --------------------------------------------------------
         let status = Updater::entity(cx).read(cx).status.clone();
@@ -647,32 +670,81 @@ impl Render for SettingsView {
         }
 
         let username = user.username.clone();
-        let danger = section("Account", cx).child(
-            div()
-                .flex()
-                .gap(px(8.))
-                .child(ui::button_with_icon("s-logout", Icon::LogOut, "Log out", cx).on_click(|_, _, cx| Session::entity(cx).update(cx, |s, cx| s.logout(cx))))
-                .child(ui::button_danger("s-delete", "Delete account", cx).on_click(move |_, _, cx| {
-                    let username = username.clone();
-                    FormSpec::new("Delete account", "Delete my account", move |v, cx| {
-                        let (username, password) = (username.clone(), v.texts[0].clone());
-                        let task = api_task(cx, move |c| c.delete_account(&username, &password));
-                        cx.spawn(async move |cx| {
-                            task.await?;
-                            cx.update(|cx| {
-                                Session::entity(cx).update(cx, |s, cx| s.logout(cx));
-                                nav::toast("Your account was deleted.", cx);
-                            })
-                            .ok();
-                            Ok(())
-                        })
+        // Every saved login on this instance, with the active one first.
+        let mut saved = Session::get(cx).saved_accounts(cx);
+        saved.sort_by_key(|a| !a.username.eq_ignore_ascii_case(&username));
+        let mut account_rows = div().flex().flex_col().gap(px(8.));
+        for (ix, account) in saved.into_iter().enumerate() {
+            let current = account.username.eq_ignore_ascii_case(&username);
+            let name = account.username.clone();
+            let (switch_name, remove_name) = (name.clone(), name.clone());
+            account_rows = account_rows.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .p(px(8.))
+                    .rounded(t.metrics.radius)
+                    .when(current, |d| d.bg(t.colors.brand.opacity(0.08)))
+                    .child(ui::avatar(account.avatar.as_deref(), &name, px(32.), cx))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(div().font_weight(gpui::FontWeight::SEMIBOLD).text_color(t.colors.text).child(format!("@{name}")))
+                            .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(if current { "Using now" } else { "Saved login" })),
+                    )
+                    .when(!current, |d| {
+                        d.child(
+                            ui::button(("s-acct-switch", ix), "Switch", cx)
+                                .on_click(move |_, _, cx| Session::entity(cx).update(cx, |s, cx| s.switch_account(&switch_name, cx))),
+                        )
                     })
-                    .description("This permanently deletes your account. Enter your password to confirm.")
-                    .field(Field::password("Password"))
-                    .danger()
-                    .open(cx);
-                })),
-        );
+                    .child(ui::button(("s-acct-remove", ix), if current { "Log out" } else { "Remove" }, cx).on_click(cx.listener(move |_, _, _, cx| {
+                        let name = remove_name.clone();
+                        Session::entity(cx).update(cx, |s, cx| s.remove_account(&name, cx));
+                        cx.notify();
+                    }))),
+            );
+        }
+        let danger = section("Accounts", cx)
+            .child(
+                div()
+                    .text_size(t.fs.s)
+                    .text_color(t.colors.text_light)
+                    .child("Stay logged in to more than one account and switch between them here or from the account menu. Removing an account logs it out."),
+            )
+            .child(account_rows)
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(8.))
+                    .child(ui::button_with_icon("s-add-account", Icon::Plus, "Add account", cx).on_click(|_, _, cx| crate::modals::open_add_account(cx)))
+                    .child(div().flex_1())
+                    .child(ui::button_danger("s-delete", format!("Delete @{username}'s account"), cx).on_click(move |_, _, cx| {
+                        let username = username.clone();
+                        FormSpec::new("Delete account", "Delete my account", move |v, cx| {
+                            let (username, password) = (username.clone(), v.texts[0].clone());
+                            let task = api_task(cx, move |c| c.delete_account(&username, &password));
+                            cx.spawn(async move |cx| {
+                                task.await?;
+                                cx.update(|cx| {
+                                    Session::entity(cx).update(cx, |s, cx| s.logout(cx));
+                                    nav::toast("Your account was deleted.", cx);
+                                })
+                                .ok();
+                                Ok(())
+                            })
+                        })
+                        .description("This permanently deletes your account. Enter your password to confirm.")
+                        .field(Field::password("Password"))
+                        .danger()
+                        .open(cx);
+                    })),
+            );
 
         let (instance_card, app_card, updates_card) = self.app_sections(window, cx);
         let help_card = help_section(cx);
@@ -680,19 +752,8 @@ impl Render for SettingsView {
         let two_cols = f32::from(window.viewport_size().width) > 1250.;
         let (left, right) = if logged_in {
             (
-                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(profile).child(prefs).child(password),
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap(px(12.))
-                    .child(app_card)
-                    .child(instance_card)
-                    .child(updates_card)
-                    .child(help_card)
-                    .child(mutes)
-                    .child(danger),
+                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(danger).child(profile).child(prefs).child(password),
+                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(instance_card).child(updates_card).child(help_card).child(mutes),
             )
         } else {
             let signin = section("Account", cx)

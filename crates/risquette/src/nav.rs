@@ -66,13 +66,15 @@ pub struct MenuItem {
     pub label: SharedString,
     pub icon: Option<Icon>,
     pub danger: bool,
+    /// Draw a divider above this item (starts a new group).
+    pub separated: bool,
     pub action: MenuAction,
 }
 
 impl MenuItem {
     pub fn new(label: impl Into<SharedString>, action: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         let label: SharedString = label.into();
-        Self { icon: guess_icon(&label), label, danger: false, action: Rc::new(action) }
+        Self { icon: guess_icon(&label), label, danger: false, separated: false, action: Rc::new(action) }
     }
 
     pub fn icon(mut self, icon: Icon) -> Self {
@@ -82,6 +84,11 @@ impl MenuItem {
 
     pub fn danger(mut self) -> Self {
         self.danger = true;
+        self
+    }
+
+    pub fn separated(mut self) -> Self {
+        self.separated = true;
         self
     }
 }

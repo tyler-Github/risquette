@@ -9,6 +9,7 @@ mod bus;
 mod communities;
 mod community;
 mod crash;
+mod desktop;
 mod embed;
 mod feed;
 mod icons;
@@ -66,6 +67,15 @@ fn main() {
         return;
     }
 
+    // One window: if Risquette is already running (with these settings), bring it
+    // to the front instead. The pop-out video player (`--play`) is exempt.
+    let play_mode = args.first().is_some_and(|a| a == "--play");
+    if !play_mode && matches!(desktop::claim_instance(), desktop::Instance::AlreadyRunning) {
+        log::info!("Risquette is already running; bringing its window to the front");
+        desktop::focus_running_instance();
+        return;
+    }
+
     // Instance: env override, then the one chosen in Settings, then discuit.org.
     let base_url = std::env::var("RISQUETTE_BASE_URL").ok().or_else(|| storage::load().instance).unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
     let client = Client::new(&base_url).expect("valid base url");
@@ -115,11 +125,14 @@ fn main() {
         })
         .detach();
 
+        // Open maximized; 1280×900, centered, is the size it restores down to.
+        // `RISQUETTE_WINDOWED=1` opens at that size instead (consistent screenshots).
         let bounds = Bounds::centered(None, size(px(1280.), px(900.)), cx);
+        let window_bounds = if std::env::var_os("RISQUETTE_WINDOWED").is_some() { WindowBounds::Windowed(bounds) } else { WindowBounds::Maximized(bounds) };
         let window = cx
             .open_window(
                 WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    window_bounds: Some(window_bounds),
                     titlebar: Some(TitlebarOptions { title: Some("Risquette".into()), ..Default::default() }),
                     window_min_size: Some(size(px(640.), px(480.))),
                     app_id: Some("risquette".into()),
@@ -134,6 +147,7 @@ fn main() {
         window
             .update(cx, |root, window, cx| {
                 window.focus(&root.focus_handle(cx));
+                desktop::init(window, cx);
                 cx.activate(true);
             })
             .ok();

@@ -311,6 +311,21 @@ pub fn open_login(cx: &mut App) {
     .open(cx);
 }
 
+/// Log in to another account, keeping the current one for switching.
+pub fn open_add_account(cx: &mut App) {
+    FormSpec::new("Add an account", "Log in", |v, cx| {
+        let (user, pass) = (v.texts[0].clone(), v.texts[1].clone());
+        if user.trim().is_empty() || pass.is_empty() {
+            return Task::ready(Err("Enter your username and password.".into()));
+        }
+        Session::entity(cx).update(cx, |s, cx| s.add_account(user, pass, cx))
+    })
+    .description("Log in to another account. You'll stay logged in to this one too, and can switch between them from the account menu or Settings.")
+    .field(Field::text("Username", "").placeholder("Username"))
+    .field(Field::password("Password").placeholder("Password"))
+    .open(cx);
+}
+
 pub fn open_signup(cx: &mut App) {
     if Session::get(cx).signups_disabled() {
         nav::toast("Sign-ups are currently disabled on this instance.", cx);

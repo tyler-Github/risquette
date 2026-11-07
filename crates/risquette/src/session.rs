@@ -17,6 +17,8 @@ pub struct Session {
     pub initial: Option<Initial>,
     pub loaded: bool,
     pub error: Option<String>,
+    /// The account being switched to, until the reload confirms it's still logged in.
+    pending_switch: Option<String>,
     _task: Option<Task<()>>,
 }
 
@@ -29,7 +31,7 @@ impl EventEmitter<SessionEvent> for Session {}
 impl Session {
     pub fn init(cx: &mut App) {
         let session = cx.new(|cx| {
-            let mut s = Session { user: None, unread_notifications: 0, initial: None, loaded: false, error: None, _task: None };
+            let mut s = Session { user: None, unread_notifications: 0, initial: None, loaded: false, error: None, pending_switch: None, _task: None };
             s.bootstrap(cx);
             s
         });
@@ -156,6 +158,17 @@ impl Session {
                         this.user = user;
                         this.initial = Some(initial);
                         this.error = None;
+                        if let Some(expected) = this.pending_switch.take()
+                            && !this.user.as_ref().is_some_and(|u| u.username.eq_ignore_ascii_case(&expected))
+                        {
+                            // The saved login has expired or was logged out elsewhere.
+                            let base = AppState::client(cx).base_url().to_string();
+                            storage::update(|s| {
+                                s.forget_account(&base, &expected);
+                            });
+                            crate::nav::toast(format!("@{expected} was logged out. Log in again to use that account."), cx);
+                        }
+                        this.remember_current_account(cx);
                     }
                     Err(e) => {
                         log::error!("bootstrap: {e}");
@@ -188,11 +201,110 @@ impl Session {
             this.update(cx, |this, cx| {
                 this.user = Some(user);
                 this.initial = Some(initial);
+                this.remember_current_account(cx);
                 cx.emit(SessionEvent::Changed);
                 cx.notify();
             })
             .map_err(|e| e.to_string())
         })
+    }
+
+    /// Log in to another account while keeping the current one saved for switching.
+    /// If the login fails, the current account stays active.
+    pub fn add_account(&mut self, username: String, password: String, cx: &mut Context<Self>) -> Task<Result<(), String>> {
+        let client = AppState::client(cx);
+        let task = cx.background_executor().spawn(async move {
+            let previous = client.export_cookies();
+            // A fresh session, so the current account's login isn't replaced.
+            client.clear_cookies();
+            let result = (|| {
+                client.initial()?;
+                client.login(username.trim(), &password)?;
+                let user = client.me()?;
+                let initial = client.initial()?;
+                Ok::<_, discuit_api::Error>((user, initial))
+            })();
+            if result.is_err() {
+                client.clear_cookies();
+                client.import_cookies(&previous);
+            }
+            persist_cookies(&client);
+            result
+        });
+        cx.spawn(async move |this, cx| {
+            let (user, initial) = task.await.map_err(|e| e.user_message())?;
+            this.update(cx, |this, cx| {
+                this.user = Some(user);
+                this.initial = Some(initial);
+                this.unread_notifications = 0;
+                this.remember_current_account(cx);
+                cx.emit(SessionEvent::Changed);
+                cx.notify();
+            })
+            .map_err(|e| e.to_string())
+        })
+    }
+
+    /// Accounts saved on the current instance (including the active one).
+    pub fn saved_accounts(&self, cx: &App) -> Vec<storage::SavedAccount> {
+        storage::load().accounts_on(AppState::client(cx).base_url().as_str())
+    }
+
+    /// Make a saved account the active one and reload everything for it.
+    pub fn switch_account(&mut self, username: &str, cx: &mut Context<Self>) {
+        let client = AppState::client(cx);
+        let base = client.base_url().to_string();
+        let Some(target) = storage::load().accounts_on(&base).into_iter().find(|a| a.username.eq_ignore_ascii_case(username)) else { return };
+        if self.username().is_some_and(|u| u.eq_ignore_ascii_case(username)) {
+            return;
+        }
+        self.remember_current_account(cx);
+        client.clear_cookies();
+        client.import_cookies(&target.cookies);
+        storage::update(|s| {
+            s.sessions.insert(base, target.cookies.clone());
+        });
+        self.pending_switch = Some(target.username.clone());
+        self.user = None;
+        self.initial = None;
+        self.unread_notifications = 0;
+        self.loaded = false;
+        cx.emit(SessionEvent::Changed);
+        cx.notify();
+        self.refresh(cx);
+        crate::nav::toast(format!("Switched to @{}", target.username), cx);
+    }
+
+    /// Forget a saved account that isn't the active one, and end its session on the server.
+    pub fn remove_account(&mut self, username: &str, cx: &mut Context<Self>) {
+        if self.username().is_some_and(|u| u.eq_ignore_ascii_case(username)) {
+            self.logout(cx);
+            return;
+        }
+        let base = AppState::client(cx).base_url().to_string();
+        let mut removed = None;
+        storage::update(|s| removed = s.forget_account(&base, username));
+        if let Some(account) = removed {
+            end_session(account.instance, account.cookies, cx);
+        }
+        cx.notify();
+    }
+
+    /// Save the active login (cookies, username, picture) for account switching.
+    fn remember_current_account(&self, cx: &App) {
+        let Some(user) = &self.user else { return };
+        let client = AppState::client(cx);
+        let cookies = client.export_cookies();
+        if cookies.is_empty() {
+            return;
+        }
+        let account = storage::SavedAccount {
+            instance: client.base_url().to_string(),
+            username: user.username.clone(),
+            cookies,
+            avatar: user.pro_pic.as_ref().map(|i| i.best_url(64).to_string()),
+        };
+        storage::update(|s| s.remember_account(account));
     }
 
     /// Create an account (logs in on success).
@@ -219,6 +331,7 @@ impl Session {
             this.update(cx, |this, cx| {
                 this.user = Some(user);
                 this.initial = Some(initial);
+                this.remember_current_account(cx);
                 cx.emit(SessionEvent::Changed);
                 cx.notify();
             })
@@ -226,8 +339,23 @@ impl Session {
         })
     }
 
+    /// Log out of the active account. If other accounts are saved on this
+    /// instance, switch to the next one; otherwise browse logged out.
     pub fn logout(&mut self, cx: &mut Context<Self>) {
         let client = AppState::client(cx);
+        let base = client.base_url().to_string();
+        if let Some(username) = self.username().map(str::to_string) {
+            storage::update(|s| {
+                s.forget_account(&base, &username);
+            });
+        }
+        if let Some(next) = storage::load().accounts_on(&base).into_iter().next() {
+            // End this session on the server, then continue as the next account.
+            end_session(base, client.export_cookies(), cx);
+            self.user = None;
+            self.switch_account(&next.username, cx);
+            return;
+        }
         let task = cx.background_executor().spawn(async move {
             if let Err(e) = client.logout() {
                 log::warn!("logout: {e}");
@@ -297,6 +425,23 @@ impl Session {
             cx.notify();
         }
     }
+}
+
+/// Log out a session (by its cookies) in the background, without touching the active one.
+fn end_session(instance: String, cookies: String, cx: &App) {
+    cx.background_executor()
+        .spawn(async move {
+            match discuit_api::Client::new(&instance) {
+                Ok(other) => {
+                    other.import_cookies(&cookies);
+                    if let Err(e) = other.logout() {
+                        log::warn!("logging out a saved account: {e}");
+                    }
+                }
+                Err(e) => log::warn!("logging out a saved account: {e}"),
+            }
+        })
+        .detach();
 }
 
 fn persist_cookies(client: &discuit_api::Client) {
