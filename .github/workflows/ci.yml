@@ -87,6 +87,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: python scripts/check_docs.py
+      - name: Changelog is valid
+        run: python scripts/changelog.py check
+      - name: Changelog script tests
+        run: python scripts/test_changelog.py
 
   audit:
     name: Dependency audit

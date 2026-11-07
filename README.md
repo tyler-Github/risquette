@@ -57,6 +57,7 @@ You'll need a stable Rust toolchain, plus the MSVC build tools and Windows SDK o
 - [Features](docs/features.md): everything Risquette can do, plus keyboard shortcuts
 - [Development](docs/development.md): project layout, running, testing
 - [Releasing and updates](docs/releasing.md): packaging, the installer and the update server
+- [Changelog](CHANGELOG.md): what's new in each release
 
 ## Contributing
 

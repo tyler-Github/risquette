@@ -16,11 +16,12 @@ Use the [issue forms](https://github.com/tyler-Github/risquette/issues/new/choos
    cargo clippy --workspace --all-targets -- -D warnings
    cargo test --workspace
    ```
-4. **Open a pull request** against `main` and fill in the template.
+4. If people using the app will notice the change, **add a line to [CHANGELOG.md](CHANGELOG.md)** under `## [Unreleased]`, in plain words. It becomes the release notes users read in the update dialog. Maintainers label other pull requests `no-changelog`.
+5. **Open a pull request** against `main` and fill in the template.
 
 ## How pull requests get merged
 
-- CI checks formatting, lints, tests and doc links on Windows, and audits dependencies. Every check must pass.
+- CI checks formatting, lints, tests, doc links and the changelog, and audits dependencies. Every check must pass.
 - Pull requests from first-time contributors wait for a maintainer to approve the CI run. That's a safety measure, not a judgement.
 - Each pull request needs an approving review from a collaborator. Changes to CI, the release pipeline, the installer and updater, or dependencies need the owner's review ([CODEOWNERS](.github/CODEOWNERS)).
 - Only the owner publishes releases.

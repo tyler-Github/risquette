@@ -25,17 +25,30 @@ GitHub release ──► Risquette-Backend ──► app: "0.2.0 is available"
 
 Only the repository owner can publish releases. The "Protect release tags" ruleset stops anyone else creating, moving or deleting `v*` tags, the release job refuses to run for anyone but the owner, and it runs in the `release` environment, which only accepts `v*` tags.
 
-1. Bump `version` in the root `Cargo.toml`.
-2. Tag and push:
+1. **Prepare the release** on a branch:
+   ```sh
+   python scripts/changelog.py prepare 0.2.0
+   ```
+   This turns the "Unreleased" notes in `CHANGELOG.md` into a dated `0.2.0` section, bumps the version in `Cargo.toml` and refreshes `Cargo.lock`. Read the notes through: they're what users see.
+2. **Commit and merge** the changes, e.g. "Release v0.2.0".
+3. **Tag and push** from the updated `main`:
    ```sh
    git tag v0.2.0 && git push origin v0.2.0
    ```
    A tag with a suffix, such as `v0.3.0-beta.1`, becomes a pre-release and is offered only on the beta channel. That makes a beta the safe way to try a release: switch one install to the beta channel in Settings → Updates and check that it updates before you publish the stable version.
-3. `.github/workflows/release.yml` runs the tests, builds the installer and attaches two files to the release:
+4. `.github/workflows/release.yml` checks that the tag matches the version and that `CHANGELOG.md` has notes for it, runs the tests, builds the installer, and publishes the release with two files:
    - `RisquetteSetup-<version>-windows-x86_64.exe`
    - `RisquetteSetup-<version>-windows-x86_64.exe.sha256`. The app won't install an update without this file.
 
-Release notes come from GitHub's automatic notes (the pull requests merged since the last release). Edit the release text on GitHub if you want to say more; the app's update dialog shows it as the "What's new" section.
+### Release notes
+
+`CHANGELOG.md` is the source of release notes. It follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/): changes collect under `## [Unreleased]`, grouped as Added, Changed, Deprecated, Removed, Fixed or Security, and `prepare` turns them into a release. The release workflow publishes that version's section as the release text, plus a "Full changelog" link to the code changes, and the app's update dialog shows it under "What's new". So:
+
+- Write entries for people using the app ("Text boxes no longer shrink…"), not for developers ("Wrap inputs in flex columns").
+- Pull requests that change the app need an entry. The **Changelog entry** check fails without one, unless the pull request has the `no-changelog` label for changes users won't notice. Dependabot pull requests are skipped.
+- GitHub's automatic release notes are turned off: they list pull request titles with @mentions, which the app would show as links to Discuit profiles.
+
+`python scripts/changelog.py check` validates the file (CI runs it), and `python scripts/changelog.py notes 0.2.0` prints a version's notes.
 
 ### Settings
 
