@@ -4,7 +4,7 @@ members = ["crates/discuit-api", "crates/risquette-theme", "crates/risquette", "
 default-members = ["crates/risquette"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0-beta.1"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/tyler-Github/risquette"
