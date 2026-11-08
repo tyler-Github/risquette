@@ -773,41 +773,45 @@ impl Render for ModToolsView {
                 .child(content)
         };
         let name = self.name.clone();
-        div().id("modtools").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div()
-                .w_full()
-                .max_w(px(crate::layout::PAGE_MAX))
-                .flex_none()
-                .px(px(16.))
-                .py(px(12.))
-                .flex()
-                .items_start()
-                .gap(px(16.))
-                .child(
-                    div()
-                        .w(px(210.))
-                        .flex_none()
-                        .flex()
-                        .flex_col()
-                        .gap(px(2.))
-                        .child(
-                            ui::button_with_icon("mt-view", Icon::Compass, "View community", cx)
-                                .w_full()
-                                .mb(px(8.))
-                                .on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)),
-                        )
-                        .children(Tab::ALL.map(|tab| {
-                            let active = self.tab == tab;
-                            let color = if active { t.colors.brand } else { t.colors.text_light };
-                            ui::selected(ui::button_clear(SharedString::from(format!("mt-tab-{}", tab.label())), cx), active, cx)
-                                .w_full()
-                                .when(active, |d| d.text_color(t.colors.brand))
-                                .child(crate::icons::icon(tab.icon(), color))
-                                .child(tab.label())
-                                .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
-                        })),
-                )
-                .child(ui::card(cx).flex_1().min_w_0().p(px(16.)).child(body)),
+        // A row whose child grows up to PAGE_MAX, not a centred column with
+        // `w_full().max_w()`, which can draw text past the edge (see settings.rs).
+        div().id("modtools").size_full().overflow_y_scroll().child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(px(crate::layout::PAGE_MAX))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .flex()
+                    .items_start()
+                    .gap(px(16.))
+                    .child(
+                        div()
+                            .w(px(210.))
+                            .flex_none()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                ui::button_with_icon("mt-view", Icon::Compass, "View community", cx)
+                                    .w_full()
+                                    .mb(px(8.))
+                                    .on_click(move |_, _, cx| nav::go(Target::Community(name.clone()), cx)),
+                            )
+                            .children(Tab::ALL.map(|tab| {
+                                let active = self.tab == tab;
+                                let color = if active { t.colors.brand } else { t.colors.text_light };
+                                ui::selected(ui::button_clear(SharedString::from(format!("mt-tab-{}", tab.label())), cx), active, cx)
+                                    .w_full()
+                                    .when(active, |d| d.text_color(t.colors.brand))
+                                    .child(crate::icons::icon(tab.icon(), color))
+                                    .child(tab.label())
+                                    .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
+                            })),
+                    )
+                    .child(ui::card(cx).flex_1().min_w_0().p(px(16.)).child(body)),
+            ),
         )
     }
 }

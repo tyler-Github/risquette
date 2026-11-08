@@ -562,46 +562,50 @@ impl Render for AdminView {
             Tab::Analytics => self.events_next.is_some(),
             _ => false,
         };
-        div().id("admin").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div()
-                .w_full()
-                .max_w(px(crate::layout::PAGE_MAX))
-                .flex_none()
-                .px(px(16.))
-                .py(px(12.))
-                .flex()
-                .items_start()
-                .gap(px(16.))
-                .child(div().w(px(210.)).flex_none().flex().flex_col().gap(px(2.)).children(Tab::ALL.map(|tab| {
-                    let active = self.tab == tab;
-                    let color = if active { t.colors.brand } else { t.colors.text_light };
-                    ui::selected(ui::button_clear(SharedString::from(format!("ad-tab-{}", tab.label())), cx), active, cx)
-                        .w_full()
-                        .when(active, |d| d.text_color(t.colors.brand))
-                        .child(crate::icons::icon(tab.icon(), color))
-                        .child(tab.label())
-                        .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
-                })))
-                .child(
-                    ui::card(cx)
-                        .flex_1()
-                        .min_w_0()
-                        .p(px(16.))
-                        .flex()
-                        .flex_col()
-                        .gap(px(10.))
-                        .when_some(self.error.clone(), |d, e| d.child(div().text_color(t.colors.red).text_size(t.fs.s).child(e)))
-                        .child(content)
-                        .when(self.loading, |d| d.child(ui::notice("Loading…", cx)))
-                        .when(has_more && !self.loading, |d| {
-                            d.child(
-                                div()
-                                    .flex()
-                                    .justify_center()
-                                    .child(ui::button("ad-more", "Load more", cx).on_click(cx.listener(|this, _, _, cx| this.load(true, cx)))),
-                            )
-                        }),
-                ),
+        // A row whose child grows up to PAGE_MAX, not a centred column with
+        // `w_full().max_w()`, which can draw text past the edge (see settings.rs).
+        div().id("admin").size_full().overflow_y_scroll().child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(px(crate::layout::PAGE_MAX))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .flex()
+                    .items_start()
+                    .gap(px(16.))
+                    .child(div().w(px(210.)).flex_none().flex().flex_col().gap(px(2.)).children(Tab::ALL.map(|tab| {
+                        let active = self.tab == tab;
+                        let color = if active { t.colors.brand } else { t.colors.text_light };
+                        ui::selected(ui::button_clear(SharedString::from(format!("ad-tab-{}", tab.label())), cx), active, cx)
+                            .w_full()
+                            .when(active, |d| d.text_color(t.colors.brand))
+                            .child(crate::icons::icon(tab.icon(), color))
+                            .child(tab.label())
+                            .on_click(cx.listener(move |this, _, _, cx| this.set_tab(tab, cx)))
+                    })))
+                    .child(
+                        ui::card(cx)
+                            .flex_1()
+                            .min_w_0()
+                            .p(px(16.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(10.))
+                            .when_some(self.error.clone(), |d, e| d.child(div().text_color(t.colors.red).text_size(t.fs.s).child(e)))
+                            .child(content)
+                            .when(self.loading, |d| d.child(ui::notice("Loading…", cx)))
+                            .when(has_more && !self.loading, |d| {
+                                d.child(
+                                    div()
+                                        .flex()
+                                        .justify_center()
+                                        .child(ui::button("ad-more", "Load more", cx).on_click(cx.listener(|this, _, _, cx| this.load(true, cx)))),
+                                )
+                            }),
+                    ),
+            ),
         )
     }
 }

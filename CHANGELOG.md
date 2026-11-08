@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Posts and comments now show tables, task lists with checkboxes, footnotes and smaller headings (levels 4 to 6), as on the Discuit website.
+
+### Changed
+
+- HTML tags in posts and comments are now hidden instead of shown as text, and images written in markdown show their address as a link, as on the Discuit website.
+- The member count in the Discuit side panel now reads as one line, such as "12k people on Discuit".
+
+### Fixed
+
+- Text in Settings, Communities, Lists, Mod tools and Admin no longer runs past the edge of its card when the window is wide.
+
 ## [0.2.0-beta.1] - 2026-11-07
 
 ### Added
