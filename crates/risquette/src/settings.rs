@@ -506,6 +506,12 @@ fn segmented(cx: &gpui::App) -> gpui::Div {
 }
 
 /// A labelled setting row: title + hint on the left, control below.
+/// A card's explanatory text, under its heading.
+fn card_text(text: impl Into<SharedString>, cx: &gpui::App) -> gpui::Div {
+    let t = cx.theme();
+    div().text_size(t.fs.s).text_color(t.colors.text_light).child(text.into())
+}
+
 fn setting(title: &'static str, hint: impl Into<SharedString>, control: impl IntoElement, cx: &gpui::App) -> gpui::Div {
     let t = cx.theme();
     div()
@@ -524,13 +530,13 @@ fn setting(title: &'static str, hint: impl Into<SharedString>, control: impl Int
 
 /// Help & troubleshooting: where to report problems, and the logs and crash reports to attach.
 fn help_section(cx: &gpui::App) -> gpui::Div {
-    let t = cx.theme();
     let crashes = crate::crash::crashes_dir();
     let crash_count = std::fs::read_dir(&crashes).map(|d| d.flatten().filter(|e| e.file_name().to_string_lossy().starts_with("crash-")).count()).unwrap_or(0);
     let logs = crate::crash::logs_dir();
     section("Help & troubleshooting", cx)
-        .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(
+        .child(card_text(
             "Found a bug or something that doesn't look right? Report it on GitHub. Attaching the log file helps us find the cause. It never includes your password or login.",
+            cx,
         ))
         .child(
             div()
@@ -710,12 +716,10 @@ impl Render for SettingsView {
             );
         }
         let danger = section("Accounts", cx)
-            .child(
-                div()
-                    .text_size(t.fs.s)
-                    .text_color(t.colors.text_light)
-                    .child("Stay logged in to more than one account and switch between them here or from the account menu. Removing an account logs it out."),
-            )
+            .child(card_text(
+                "Stay logged in to more than one account and switch between them here or from the account menu. Removing an account logs it out.",
+                cx,
+            ))
             .child(account_rows)
             .child(
                 div()
@@ -756,35 +760,36 @@ impl Render for SettingsView {
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(instance_card).child(updates_card).child(help_card).child(mutes),
             )
         } else {
-            let signin = section("Account", cx)
-                .child(
-                    div().text_size(t.fs.s).text_color(t.colors.text_light).child("Log in to edit your profile, notification preferences, password and mutes."),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .gap(px(8.))
-                        .child(ui::button_main_with_icon("s-login", Icon::LogIn, "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx)))
-                        .child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))),
-                );
+            let signin = section("Account", cx).child(card_text("Log in to edit your profile, notification preferences, password and mutes.", cx)).child(
+                div()
+                    .flex()
+                    .gap(px(8.))
+                    .child(ui::button_main_with_icon("s-login", Icon::LogIn, "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx)))
+                    .child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))),
+            );
             (
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(signin).child(help_card),
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(instance_card).child(updates_card),
             )
         };
-        div().id("settings").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div()
-                .w_full()
-                .max_w(px(crate::layout::PAGE_MAX))
-                .flex_none()
-                .px(px(16.))
-                .py(px(12.))
-                .flex()
-                .when(two_cols, |d| d.flex_row().items_start())
-                .when(!two_cols, |d| d.flex_col())
-                .gap(px(12.))
-                .child(left)
-                .child(right),
+        // Centred with a row whose child grows up to PAGE_MAX, rather than a centred
+        // column with `w_full().max_w()`: in that layout GPUI also measures text at
+        // the uncapped width, then draws it on one line past the card's edge.
+        div().id("settings").size_full().overflow_y_scroll().child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(px(crate::layout::PAGE_MAX))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .flex()
+                    .when(two_cols, |d| d.flex_row().items_start())
+                    .when(!two_cols, |d| d.flex_col())
+                    .gap(px(12.))
+                    .child(left)
+                    .child(right),
+            ),
         )
     }
 }

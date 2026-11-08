@@ -236,34 +236,38 @@ impl Render for CommunitiesView {
                 grid.into_any_element()
             }
         };
-        div().id("communities").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div()
-                .w_full()
-                .max_w(px(crate::layout::PAGE_MAX))
-                .flex_none()
-                .px(px(16.))
-                .py(px(12.))
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(div().flex_1().min_w(px(200.)).flex().flex_col().child(self.search.clone()))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(px(2.))
-                                .child(set_tab("all", "All", self, cx))
-                                .child(set_tab("default", "Default", self, cx))
-                                .when(logged_in, |d| d.child(set_tab("subscribed", "Joined", self, cx))),
-                        )
-                        .child(ui::button_with_icon("c-request", Icon::Inbox, "Request one", cx).on_click(|_, _, cx| open_request_community(cx)))
-                        .child(ui::button_main_with_icon("c-create", Icon::Plus, "Create community", cx).on_click(|_, _, cx| open_create_community(cx))),
-                )
-                .child(body),
+        // A row whose child grows up to PAGE_MAX, not a centred column with
+        // `w_full().max_w()`, which can draw text past the edge (see settings.rs).
+        div().id("communities").size_full().overflow_y_scroll().child(
+            div().w_full().flex().justify_center().child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .max_w(px(crate::layout::PAGE_MAX))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(div().flex_1().min_w(px(200.)).flex().flex_col().child(self.search.clone()))
+                            .child(
+                                div()
+                                    .flex()
+                                    .gap(px(2.))
+                                    .child(set_tab("all", "All", self, cx))
+                                    .child(set_tab("default", "Default", self, cx))
+                                    .when(logged_in, |d| d.child(set_tab("subscribed", "Joined", self, cx))),
+                            )
+                            .child(ui::button_with_icon("c-request", Icon::Inbox, "Request one", cx).on_click(|_, _, cx| open_request_community(cx)))
+                            .child(ui::button_main_with_icon("c-create", Icon::Plus, "Create community", cx).on_click(|_, _, cx| open_create_community(cx))),
+                    )
+                    .child(body),
+            ),
         )
     }
 }

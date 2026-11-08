@@ -292,8 +292,10 @@ impl Render for ListsView {
                 grid.into_any_element()
             }
         };
-        div().id("lists").size_full().overflow_y_scroll().flex().flex_col().items_center().child(
-            div().w_full().max_w(px(crate::layout::PAGE_MAX)).flex_none().px(px(16.)).py(px(12.)).flex().flex_col().gap(px(12.)).child(header).child(body),
-        )
+        // A row whose child grows up to PAGE_MAX, not a centred column with
+        // `w_full().max_w()`, which can draw text past the edge (see settings.rs).
+        div().id("lists").size_full().overflow_y_scroll().child(div().w_full().flex().justify_center().child(
+            div().flex_1().min_w_0().max_w(px(crate::layout::PAGE_MAX)).px(px(16.)).py(px(12.)).flex().flex_col().gap(px(12.)).child(header).child(body),
+        ))
     }
 }
