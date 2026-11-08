@@ -3,7 +3,7 @@
   <img alt="Risquette: Releasing and updates" src="../branding/headers/releasing-light.png">
 </picture>
 
-Risquette ships as a Windows installer attached to GitHub releases. The update server reads those releases and tells the app when a newer version exists.
+Risquette ships as a Windows installer and a Linux AppImage attached to GitHub releases. The update server reads those releases and tells the app when a newer version exists.
 
 ```
 GitHub release ──► Risquette-Backend ──► app: "0.2.0 is available"
@@ -36,9 +36,11 @@ Only the repository owner can publish releases. The "Protect release tags" rules
    git tag v0.2.0 && git push origin v0.2.0
    ```
    A tag with a suffix, such as `v0.3.0-beta.1`, becomes a pre-release and is offered only on the beta channel. That makes a beta the safe way to try a release: switch one install to the beta channel in Settings → Updates and check that it updates before you publish the stable version.
-4. `.github/workflows/release.yml` checks that the tag matches the version and that `CHANGELOG.md` has notes for it, runs the tests, builds the installer, and publishes the release with two files:
-   - `RisquetteSetup-<version>-windows-x86_64.exe`
-   - `RisquetteSetup-<version>-windows-x86_64.exe.sha256`. The app won't install an update without this file.
+4. `.github/workflows/release.yml` checks that the tag matches the version and that `CHANGELOG.md` has notes for it. Then it builds and tests on Windows and Linux side by side, and publishes the release once with four files:
+   - `RisquetteSetup-<version>-windows-x86_64.exe` and its `.sha256`
+   - `Risquette-<version>-linux-x86_64.AppImage` and its `.sha256`
+
+   The app won't install an update without the checksum file. The AppImage is built on Ubuntu 22.04, so it runs on distributions at least that new.
 
 ### Betas
 
@@ -77,7 +79,7 @@ Put the signing secrets in the `release` environment (Settings → Environments 
 
 Add `-UpdateUrl https://updates.example.com` to build against a self-hosted update server.
 
-This writes the installer and its checksum to `dist/`.
+This writes the installer and its checksum to `dist/`. On Linux, `./scripts/package-linux.sh` builds the AppImage the same way (set `RISQUETTE_UPDATE_URL` for a self-hosted server). It downloads a pinned, checksum-verified `linuxdeploy` to bundle the libraries the app needs.
 
 ## Installer command line
 

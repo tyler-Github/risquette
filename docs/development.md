@@ -23,7 +23,20 @@ For how to propose changes and how pull requests get reviewed, see [CONTRIBUTING
 
 ## Running
 
-You need a stable Rust toolchain. On Windows you also need the MSVC build tools and the Windows SDK.
+You need a stable Rust toolchain, plus:
+
+- **Windows:** the MSVC build tools and the Windows SDK.
+- **Linux:** a C compiler and the development packages listed in `packaging/linux/build-deps.txt`. On Debian and Ubuntu: `xargs -a packaging/linux/build-deps.txt sudo apt-get install -y`. The installer crate is Windows-only, so build and test with `--workspace --exclude risquette-installer`.
+
+Some features differ by platform:
+
+| | Windows | Linux |
+| --- | --- | --- |
+| Videos | Pop-out player (WebView2) | Open in the browser |
+| Desktop notifications | Through a tray icon | Through the desktop's notification service (D-Bus) |
+| One window | Named mutex, and `instance.pid` to find the window | Lock file, and a local socket the second launch uses |
+| Updates | The installer replaces the app | The AppImage replaces itself (`$APPIMAGE`) |
+| Package | `risquette-setup.exe` (`scripts/package.ps1`) | AppImage (`scripts/package-linux.sh`) |
 
 ```sh
 cargo run                                  # start the app

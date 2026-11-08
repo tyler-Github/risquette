@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Risquette
+GenericName=Discuit client
+Comment=A fast, native desktop client for Discuit
+Exec=risquette %U
+Icon=risquette
+Terminal=false
+Categories=Network;Chat;
+Keywords=Discuit;forum;community;social;
+StartupWMClass=risquette

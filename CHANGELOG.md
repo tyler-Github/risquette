@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Risquette now runs on Linux. Download the AppImage, make it executable and open it: it works on most distributions and updates itself like the Windows version. Desktop notifications use your desktop's notification system, and videos open in your web browser.
+
+### Changed
+
+- Opening a video in your web browser now opens its normal page (on YouTube, Vimeo, Streamable or Dailymotion) instead of a bare player.
+
 ## [0.2.0-beta.1] - 2026-11-07
 
 ### Added

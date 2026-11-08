@@ -33,7 +33,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 - **Voting, commenting and posting:** with a markdown toolbar and preview, drag-and-drop image uploads, community suggestions, and a "fetch title" button for links.
 - **Post and comment menus:** save to a list, copy the link, hide, report, mute, edit and delete.
 - **Notifications:** a bell in the toolbar with an unread counter. You can mark notifications read or unread and delete them, one at a time or all at once.
-- **Desktop notifications:** new notifications also appear as Windows notifications while Risquette isn't the window you're using. Clicking one opens it in the app. They're off by default; turn them on in Settings → App. While they're on, a tray icon brings the window back with a click, and its right-click menu can quit Risquette.
+- **Desktop notifications:** new notifications also appear as desktop notifications while Risquette isn't the window you're using. Clicking one opens it in the app. They're off by default; turn them on in Settings → App. On Windows, a tray icon is shown while they're on: click it to bring the window back, or right-click to quit.
 - **Communities:** join, leave or mute them, and create or request new ones.
 
 <p align="center">

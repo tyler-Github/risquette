@@ -20,14 +20,19 @@ pulldown-cmark = { version = "0.13", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
-wry = "=0.57.1"
 sha2 = "0.10"
 discuit-api.workspace = true
 risquette-theme.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# The pop-out video player (WebView2). Other platforms open videos in the browser.
+wry = "=0.57.1"
 # Same version gpui uses; for the native video player window.
 windows = { version = "=0.61.3", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi", "Win32_UI_HiDpi", "Win32_System_Registry", "Win32_System_Threading", "Win32_Security", "Win32_UI_Shell"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Desktop notifications through the freedesktop D-Bus service (pure Rust, via zbus).
+notify-rust = "4"
 
 [target.'cfg(windows)'.build-dependencies]
 embed-resource = "3"
