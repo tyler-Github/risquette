@@ -258,8 +258,11 @@ fn bring_to_front(cx: &mut App) {
         win::bring_main_window_to_front();
     }
     #[cfg(not(windows))]
-    if let Some(handle) = cx.try_global::<MainWindow>().map(|m| m.0) {
-        let _ = cx.update_window(handle, |_, window, _| window.activate_window());
+    {
+        use gpui::AppContext as _;
+        if let Some(handle) = cx.try_global::<MainWindow>().map(|m| m.0) {
+            let _ = cx.update_window(handle, |_, window, _| window.activate_window());
+        }
     }
 }
 
