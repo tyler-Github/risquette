@@ -40,7 +40,10 @@
 
 Download **RisquetteSetup** from the [latest release](https://github.com/tyler-Github/risquette/releases/latest) and run it. It installs just for you, with no administrator rights, and keeps itself up to date.
 
-Risquette currently targets Windows 10 and 11. Windows may show a SmartScreen warning the first time; choose **More info → Run anyway**. Every release publishes the installer's SHA-256 checksum next to it.
+- **Windows 10 and 11:** run the installer. Windows may show a SmartScreen warning the first time; choose **More info → Run anyway**.
+- **Linux:** download the AppImage, make it executable (`chmod +x Risquette-*.AppImage`, or tick "Allow executing as program" in its properties) and open it. It runs on most distributions and updates itself.
+
+Every release publishes SHA-256 checksums next to the downloads, and [risquette.xnoid.studio/releases](https://risquette.xnoid.studio/releases) lists every version.
 
 ## Build from source
 
@@ -50,7 +53,7 @@ cd risquette
 cargo run --release
 ```
 
-You'll need a stable Rust toolchain, plus the MSVC build tools and Windows SDK on Windows. See [Development](docs/development.md).
+You'll need a stable Rust toolchain, plus the MSVC build tools and Windows SDK on Windows, or a few development packages on Linux. See [Development](docs/development.md).
 
 ## Documentation
 

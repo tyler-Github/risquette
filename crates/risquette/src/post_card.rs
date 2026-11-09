@@ -467,7 +467,7 @@ pub fn embed_view(key: &str, link: &str, title: &str, fallback_thumb: Option<&di
                     .on_click(move |_, _, cx| {
                         cx.stop_propagation();
                         if crate::storage::load().videos_in_browser {
-                            cx.open_url(player.url());
+                            cx.open_url(&player.browser_url());
                         } else {
                             crate::player::open(player.clone(), title.clone(), cx);
                         }

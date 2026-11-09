@@ -1,15 +1,15 @@
-# Builds the Windows installer and publishes it to a GitHub release when a
-# version tag is pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
+# Builds the Windows installer and the Linux AppImage and publishes them to a
+# GitHub release when a version tag is pushed (e.g. `git tag v0.2.0 && git push origin v0.2.0`).
 #
 # Who can release: only the repository owner. A tag ruleset stops anyone else
-# creating `v*` tags, the job below refuses to run for anyone but the owner,
-# and the `release` environment only accepts `v*` tags.
+# creating `v*` tags, every job refuses to run for anyone but the owner, and the
+# `release` environment only accepts `v*` tags.
 #
-# The update server (Risquette-Backend) reads these releases:
-#   RisquetteSetup-<version>-windows-x86_64.exe         the installer
-#   RisquetteSetup-<version>-windows-x86_64.exe.sha256  its checksum (required by the app)
-# Tags with a pre-release suffix (v0.3.0-beta.1) become pre-releases and are
-# offered only on the beta channel.
+# The update server (Risquette-Backend) reads these release files:
+#   RisquetteSetup-<version>-windows-x86_64.exe   (+ .sha256)  Windows installer
+#   Risquette-<version>-linux-x86_64.AppImage     (+ .sha256)  Linux AppImage
+# The app refuses updates without the checksum files. Tags with a pre-release
+# suffix (v0.3.0-beta.1) become pre-releases, offered only on the beta channel.
 #
 # Release notes come from the tag's section in CHANGELOG.md
 # (`python scripts/changelog.py prepare <version>` creates it). The app shows
@@ -18,7 +18,7 @@
 # Settings (optional):
 #   Variable RISQUETTE_UPDATE_URL  a different update server to bake into the app
 #                                  (default: the official https://risquette.xnoid.studio)
-#   Secrets in the `release` environment, for code signing:
+#   Secrets in the `release` environment, for code signing (Windows):
 #                                  SIGNTOOL_CERT_BASE64, SIGNTOOL_PASSWORD
 
 name: Release
@@ -35,13 +35,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  check:
+    name: Check version and notes
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: The tag matches the crate version
+        run: |
+          version="$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "risquette"))')"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} doesn't match Cargo version ${version}"
+            exit 1
+          fi
+      - name: Release notes from CHANGELOG.md
+        run: |
+          python3 scripts/changelog.py check
+          python3 scripts/changelog.py notes "${GITHUB_REF_NAME}" --out release-notes.md
+          cat release-notes.md
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: release-notes.md
+
   windows:
-    name: Build and publish
+    name: Build (Windows)
+    needs: check
     if: github.actor == github.repository_owner
     runs-on: windows-latest
     environment: release
-    permissions:
-      contents: write # create the GitHub release
     env:
       SIGNTOOL_CERT_BASE64: ${{ secrets.SIGNTOOL_CERT_BASE64 }}
     steps:
@@ -54,22 +78,6 @@ jobs:
           toolchain: stable
 
       # No build cache here on purpose: release binaries are always built from scratch.
-
-      - name: Check the tag matches the crate version
-        shell: pwsh
-        run: |
-          $version = ((cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages | Where-Object name -eq "risquette").version
-          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match Cargo version $version" }
-
-      - name: Release notes from CHANGELOG.md
-        shell: pwsh
-        run: |
-          python scripts/changelog.py check
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP/release" | Out-Null
-          python scripts/changelog.py notes $env:GITHUB_REF_NAME --out "$env:RUNNER_TEMP/release/notes.md"
-          if ($LASTEXITCODE -ne 0) { exit 1 }
-          Get-Content "$env:RUNNER_TEMP/release/notes.md"
 
       - name: Test
         run: cargo test --workspace --locked
@@ -91,17 +99,65 @@ jobs:
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: installer
+          name: windows
           path: dist/*
 
-      - name: Publish release
+  linux:
+    name: Build (Linux)
+    needs: check
+    if: github.actor == github.repository_owner
+    # The oldest supported Ubuntu, so the AppImage runs on as many distributions as possible.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          xargs -a packaging/linux/build-deps.txt sudo apt-get install -y --no-install-recommends
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+
+      - name: Test
+        run: cargo test --workspace --exclude risquette-installer --locked
+
+      - name: Package
+        env:
+          RISQUETTE_UPDATE_URL: ${{ vars.RISQUETTE_UPDATE_URL }}
+        run: ./scripts/package-linux.sh
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux
+          path: dist/*
+
+  publish:
+    name: Publish release
+    needs: [windows, linux]
+    if: github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write # create the GitHub release
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+
+      - name: Publish
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           name: Risquette ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name, '-') }}
           # Notes from CHANGELOG.md. GitHub's automatic notes stay off: their
           # @mentions would show as Discuit profile links in the app.
-          body_path: ${{ runner.temp }}/release/notes.md
+          body_path: artifacts/release-notes/release-notes.md
           files: |
-            dist/RisquetteSetup-*.exe
-            dist/RisquetteSetup-*.exe.sha256
+            artifacts/windows/RisquetteSetup-*.exe
+            artifacts/windows/RisquetteSetup-*.exe.sha256
+            artifacts/linux/Risquette-*.AppImage
+            artifacts/linux/Risquette-*.AppImage.sha256

@@ -158,10 +158,28 @@ pub fn system_description() -> String {
         }
         #[cfg(not(windows))]
         {
-            format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
+            // e.g. "Ubuntu 24.04.1 LTS (kernel 6.8.0-45-generic, wayland), x86_64"
+            let name = std::fs::read_to_string("/etc/os-release").ok().and_then(|t| os_release_name(&t)).unwrap_or_else(|| std::env::consts::OS.to_string());
+            let mut details = Vec::new();
+            if let Ok(kernel) = std::fs::read_to_string("/proc/sys/kernel/osrelease") {
+                details.push(format!("kernel {}", kernel.trim()));
+            }
+            if let Ok(session) = std::env::var("XDG_SESSION_TYPE") {
+                details.push(session);
+            }
+            let details = if details.is_empty() { String::new() } else { format!(" ({})", details.join(", ")) };
+            format!("{name}{details}, {}", std::env::consts::ARCH)
         }
     })
     .clone()
+}
+
+/// The distribution name from `/etc/os-release` (`PRETTY_NAME`, else `NAME`).
+#[cfg_attr(windows, allow(dead_code))]
+fn os_release_name(text: &str) -> Option<String> {
+    let value =
+        |key: &str| text.lines().find_map(|l| l.strip_prefix(key)?.strip_prefix('=')).map(|v| v.trim().trim_matches('"').to_string()).filter(|v| !v.is_empty());
+    value("PRETTY_NAME").or_else(|| value("NAME"))
 }
 
 #[cfg(windows)]
@@ -512,7 +530,7 @@ impl Render for CrashWindow {
                 div()
                     .text_size(px(11.))
                     .text_color(t.colors.text_light)
-                    .child("The report includes the Risquette and Windows versions, what went wrong and the app's recent activity log. It never includes your password or login. Have a look before you post it."),
+                    .child("The report includes the Risquette version, your system, what went wrong and the app's recent activity log. It never includes your password or login. Have a look before you post it."),
             )
     }
 }
@@ -601,6 +619,14 @@ mod tests {
         assert!(url.contains("&version=") && url.contains("&os=") && url.contains("&logs="));
         assert!(url.contains("truncated"));
         assert!(url.len() < 8000, "URL too long: {}", url.len());
+    }
+
+    #[test]
+    fn linux_distribution_names() {
+        let text = "NAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nPRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\n";
+        assert_eq!(os_release_name(text).as_deref(), Some("Ubuntu 24.04.1 LTS"));
+        assert_eq!(os_release_name("NAME=Arch Linux\n").as_deref(), Some("Arch Linux"));
+        assert_eq!(os_release_name("ID=x\n"), None);
     }
 
     #[test]

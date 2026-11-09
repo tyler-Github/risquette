@@ -1,17 +1,17 @@
-//! Desktop integration (Windows): one running copy per settings profile, and a
-//! tray icon that shows desktop notifications for new Discuit notifications.
+//! Desktop integration: one running copy per settings profile, and desktop
+//! notifications for new Discuit notifications.
 //!
-//! - **One window.** The first copy takes a named mutex (one per settings
-//!   folder, so test or portable profiles don't block each other) and writes its
-//!   process id to `instance.pid`. A second launch finds that process's window,
-//!   brings it to the front, and exits.
-//! - **Notifications.** Opt-in (off by default). While they're on and someone is logged
-//!   in, a tray icon is shown. New notifications appear as Windows notifications
-//!   through it (`Shell_NotifyIcon` balloons, which Windows 10/11 show as toasts
-//!   without any app registration), but only while Risquette isn't the active
-//!   window. Clicking one opens the notification in the app.
-//!
-//! On other platforms these are no-ops.
+//! - **One window.** Each settings folder gets its own lock, so test or portable
+//!   profiles don't block each other. A second launch asks the running copy to
+//!   come to the front, then exits.
+//!   - Windows: a named mutex, and `instance.pid` to find the running window.
+//!   - Linux: an exclusive lock on `instance.lock`, and a local socket the second
+//!     launch uses to say "show yourself".
+//! - **Notifications.** Opt-in (off by default), only while Risquette isn't the
+//!   active window. Clicking one opens it in the app.
+//!   - Windows: through a tray icon (`Shell_NotifyIcon` balloons, which Windows
+//!     10/11 show as toasts without any app registration).
+//!   - Linux: the freedesktop notification service over D-Bus; no tray icon.
 
 use crate::{
     nav::{self, Target},
@@ -20,15 +20,34 @@ use crate::{
 };
 use discuit_api::Notification;
 use gpui::{App, Global, Window};
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::OnceLock};
 
-/// What the tray icon or a notification asked for.
+/// What the tray icon, a notification or a second launch asked for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(windows), allow(dead_code))]
 enum TrayEvent {
     Open,
     NotificationClicked,
     Quit,
 }
+
+/// Events from other threads (tray window, notification clicks, the socket),
+/// delivered to the UI thread by the task started in [`init`].
+static EVENTS: OnceLock<smol::channel::Sender<TrayEvent>> = OnceLock::new();
+
+#[cfg_attr(not(any(windows, target_os = "linux")), allow(dead_code))]
+fn send_event(event: TrayEvent) {
+    if let Some(tx) = EVENTS.get() {
+        let _ = tx.try_send(event);
+    }
+}
+
+/// The main window, so other platforms can bring it to the front through GPUI.
+#[cfg(not(windows))]
+struct MainWindow(gpui::AnyWindowHandle);
+
+#[cfg(not(windows))]
+impl Global for MainWindow {}
 
 // ---------------------------------------------------------------------------
 // One running copy
@@ -48,6 +67,7 @@ fn profile_key() -> String {
     format!("{hash:016x}")
 }
 
+#[cfg(windows)]
 fn pid_file() -> Option<std::path::PathBuf> {
     Some(storage::dir()?.join("instance.pid"))
 }
@@ -65,7 +85,13 @@ pub fn claim_instance() -> Instance {
         }
         Instance::AlreadyRunning
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        let Some(dir) = storage::dir() else { return Instance::First };
+        let _ = std::fs::create_dir_all(&dir);
+        if linux::claim(&dir.join("instance.lock"), &profile_key()) { Instance::First } else { Instance::AlreadyRunning }
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     Instance::First
 }
 
@@ -83,7 +109,18 @@ pub fn focus_running_instance() -> bool {
         }
         false
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        // The other copy may still be starting up.
+        for _ in 0..20 {
+            if linux::ask_running_copy_to_show(&profile_key()) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(150));
+        }
+        false
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
     false
 }
 
@@ -162,9 +199,15 @@ pub fn on_notifications(items: &[Notification], cx: &mut App) {
     let new: Vec<&Notification> = items.iter().filter(|n| fresh.contains(&n.id)).collect();
     let (title, body, target) = message_for(&new);
     cx.default_global::<NotifierState>().target = Some(target);
+    show_notification(&title, &body);
+}
+
+fn show_notification(title: &str, body: &str) {
     #[cfg(windows)]
-    win::show_notification(&title, &body);
-    #[cfg(not(windows))]
+    win::show_notification(title, body);
+    #[cfg(target_os = "linux")]
+    linux::show_notification(title, body);
+    #[cfg(not(any(windows, target_os = "linux")))]
     let _ = (title, body);
 }
 
@@ -172,8 +215,18 @@ pub fn on_notifications(items: &[Notification], cx: &mut App) {
 // Tray icon
 // ---------------------------------------------------------------------------
 
-/// Start listening for tray and notification clicks. Call once, after the main window opens.
+/// Start listening for tray, notification and second-launch events. Call once, after the main window opens.
 pub fn init(window: &Window, cx: &mut App) {
+    let (tx, rx) = smol::channel::unbounded::<TrayEvent>();
+    let _ = EVENTS.set(tx);
+    cx.spawn(async move |cx| {
+        while let Ok(event) = rx.recv().await {
+            if cx.update(|cx| handle_event(event, cx)).is_err() {
+                break;
+            }
+        }
+    })
+    .detach();
     #[cfg(windows)]
     {
         use raw_window_handle::HasWindowHandle;
@@ -183,16 +236,6 @@ pub fn init(window: &Window, cx: &mut App) {
         {
             win::set_main_window(h.hwnd.get());
         }
-        let (tx, rx) = smol::channel::unbounded::<TrayEvent>();
-        win::set_event_sender(tx);
-        cx.spawn(async move |cx| {
-            while let Ok(event) = rx.recv().await {
-                if cx.update(|cx| handle_event(event, cx)).is_err() {
-                    break;
-                }
-            }
-        })
-        .detach();
         cx.on_app_quit(|_| {
             win::remove_tray();
             async {}
@@ -200,9 +243,27 @@ pub fn init(window: &Window, cx: &mut App) {
         .detach();
     }
     #[cfg(not(windows))]
-    let _ = window;
+    cx.set_global(MainWindow(window.window_handle()));
+    #[cfg(target_os = "linux")]
+    linux::listen_for_second_launch();
     sync_tray(cx);
     schedule_test_notification(cx);
+}
+
+/// Bring the main window to the front (restoring it if minimized, where the platform allows).
+fn bring_to_front(cx: &mut App) {
+    #[cfg(windows)]
+    {
+        let _ = cx;
+        win::bring_main_window_to_front();
+    }
+    #[cfg(not(windows))]
+    {
+        use gpui::AppContext as _;
+        if let Some(handle) = cx.try_global::<MainWindow>().map(|m| m.0) {
+            let _ = cx.update_window(handle, |_, window, _| window.activate_window());
+        }
+    }
 }
 
 /// For trying notifications without an account: `RISQUETTE_TEST_NOTIFICATION=1`
@@ -216,10 +277,8 @@ fn schedule_test_notification(cx: &mut App) {
         cx.update(|cx| {
             cx.default_global::<NotifierState>().target = Some(Target::Notifications);
             #[cfg(windows)]
-            {
-                win::show_tray();
-                win::show_notification("Risquette test notification", "If you can see this, desktop notifications work. Click it to open Notifications.");
-            }
+            win::show_tray();
+            show_notification("Risquette test notification", "If you can see this, desktop notifications work. Click it to open Notifications.");
         })
         .ok();
     })
@@ -241,16 +300,11 @@ pub fn sync_tray(cx: &mut App) {
     let _ = wanted;
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 fn handle_event(event: TrayEvent, cx: &mut App) {
     match event {
-        TrayEvent::Open => {
-            #[cfg(windows)]
-            win::bring_main_window_to_front();
-        }
+        TrayEvent::Open => bring_to_front(cx),
         TrayEvent::NotificationClicked => {
-            #[cfg(windows)]
-            win::bring_main_window_to_front();
+            bring_to_front(cx);
             let target = cx.default_global::<NotifierState>().target.take().unwrap_or(Target::Notifications);
             nav::go(target, cx);
         }
@@ -260,8 +314,8 @@ fn handle_event(event: TrayEvent, cx: &mut App) {
 
 #[cfg(windows)]
 mod win {
-    use super::TrayEvent;
-    use std::cell::{Cell, RefCell};
+    use super::{TrayEvent, send_event as send};
+    use std::cell::Cell;
     use windows::{
         Win32::{
             Foundation::{ERROR_ALREADY_EXISTS, GetLastError, HWND, LPARAM, LRESULT, POINT, WPARAM},
@@ -283,7 +337,6 @@ mod win {
     const MENU_QUIT: usize = 2;
 
     thread_local! {
-        static EVENTS: RefCell<Option<smol::channel::Sender<TrayEvent>>> = const { RefCell::new(None) };
         static MAIN: Cell<isize> = const { Cell::new(0) };
         static TRAY: Cell<isize> = const { Cell::new(0) };
         static VISIBLE: Cell<bool> = const { Cell::new(false) };
@@ -352,18 +405,6 @@ mod win {
         if hwnd != 0 {
             bring_to_front(HWND(hwnd as *mut _));
         }
-    }
-
-    pub fn set_event_sender(tx: smol::channel::Sender<TrayEvent>) {
-        EVENTS.with(|e| *e.borrow_mut() = Some(tx));
-    }
-
-    fn send(event: TrayEvent) {
-        EVENTS.with(|e| {
-            if let Some(tx) = e.borrow().as_ref() {
-                let _ = tx.try_send(event);
-            }
-        });
     }
 
     fn show_menu(hwnd: HWND) {
@@ -504,6 +545,98 @@ mod win {
                 log::warn!("couldn't show a desktop notification");
             }
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use super::{TrayEvent, send_event};
+    use std::{
+        fs::{File, TryLockError},
+        io::{Read, Write},
+        os::unix::net::{UnixListener, UnixStream},
+        path::{Path, PathBuf},
+        sync::OnceLock,
+        time::Duration,
+    };
+
+    /// Held for the life of the process: the lock that makes this the only copy.
+    static LOCK: OnceLock<File> = OnceLock::new();
+    static LISTENER: OnceLock<UnixListener> = OnceLock::new();
+
+    fn socket_path(key: &str) -> PathBuf {
+        let dir = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+        dir.join(format!("risquette-{key}.sock"))
+    }
+
+    /// Take the profile's lock; false if another copy holds it.
+    pub fn claim(lock_path: &Path, key: &str) -> bool {
+        let Ok(file) = File::options().create(true).truncate(false).write(true).open(lock_path) else { return true };
+        match file.try_lock() {
+            Ok(()) => {
+                let _ = LOCK.set(file);
+                // We own the profile now, so any socket file left behind is stale.
+                let path = socket_path(key);
+                let _ = std::fs::remove_file(&path);
+                match UnixListener::bind(&path) {
+                    Ok(listener) => {
+                        let _ = LISTENER.set(listener);
+                    }
+                    Err(e) => log::warn!("single-instance socket: {e}"),
+                }
+                true
+            }
+            Err(TryLockError::WouldBlock) => false,
+            // Locking isn't supported here (unusual file system): don't block startup.
+            Err(TryLockError::Error(e)) => {
+                log::warn!("single-instance lock: {e}");
+                true
+            }
+        }
+    }
+
+    /// Accept "show" requests from later launches (on a background thread).
+    pub fn listen_for_second_launch() {
+        let Some(listener) = LISTENER.get().and_then(|l| l.try_clone().ok()) else { return };
+        std::thread::spawn(move || {
+            for mut stream in listener.incoming().flatten() {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(1)));
+                let mut buf = [0u8; 16];
+                if let Ok(n) = stream.read(&mut buf)
+                    && buf[..n].starts_with(b"show")
+                {
+                    send_event(TrayEvent::Open);
+                }
+            }
+        });
+    }
+
+    /// Ask the running copy to come to the front; false if it couldn't be reached.
+    pub fn ask_running_copy_to_show(key: &str) -> bool {
+        UnixStream::connect(socket_path(key)).and_then(|mut s| s.write_all(b"show\n")).is_ok()
+    }
+
+    /// Show a desktop notification; clicking it opens the item in the app.
+    pub fn show_notification(title: &str, body: &str) {
+        let (title, body) = (title.to_string(), body.to_string());
+        // Waiting for the click blocks, so it gets its own thread.
+        std::thread::spawn(move || {
+            // Inside an AppImage the icon file sits at its root; otherwise rely on the icon theme.
+            let icon = std::env::var_os("APPDIR")
+                .map(|dir| PathBuf::from(dir).join("risquette.png"))
+                .filter(|p| p.exists())
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "risquette".to_string());
+            let shown = notify_rust::Notification::new().appname("Risquette").summary(&title).body(&body).icon(&icon).action("default", "Open").show();
+            match shown {
+                Ok(handle) => handle.wait_for_action(|action| {
+                    if action == "default" {
+                        send_event(TrayEvent::NotificationClicked);
+                    }
+                }),
+                Err(e) => log::warn!("couldn't show a desktop notification: {e}"),
+            }
+        });
     }
 }
 

@@ -23,7 +23,20 @@ For how to propose changes and how pull requests get reviewed, see [CONTRIBUTING
 
 ## Running
 
-You need a stable Rust toolchain. On Windows you also need the MSVC build tools and the Windows SDK.
+You need a stable Rust toolchain, plus:
+
+- **Windows:** the MSVC build tools and the Windows SDK.
+- **Linux:** a C compiler and the development packages listed in `packaging/linux/build-deps.txt`. On Debian and Ubuntu: `xargs -a packaging/linux/build-deps.txt sudo apt-get install -y`. The installer crate is Windows-only, so build and test with `--workspace --exclude risquette-installer`.
+
+Some features differ by platform:
+
+| | Windows | Linux |
+| --- | --- | --- |
+| Videos | Pop-out player (WebView2) | Open in the browser |
+| Desktop notifications | Through a tray icon | Through the desktop's notification service (D-Bus) |
+| One window | Named mutex, and `instance.pid` to find the window | Lock file, and a local socket the second launch uses |
+| Updates | The installer replaces the app | The AppImage replaces itself (`$APPIMAGE`) |
+| Package | `risquette-setup.exe` (`scripts/package.ps1`) | AppImage (`scripts/package-linux.sh`) |
 
 ```sh
 cargo run                                  # start the app
@@ -83,6 +96,13 @@ Every pull request and push to `main` runs `.github/workflows/ci.yml`. All of th
 | Tests | `cargo test --workspace --locked`, then a full build |
 | Docs and links | `python scripts/check_docs.py` (every local link and image in the Markdown exists), plus `python scripts/changelog.py check` and the changelog script's tests |
 | Dependency audit | `cargo audit` against the RustSec advisory database |
+
+Two Linux checks run alongside them, on Ubuntu 22.04 like the release build:
+
+| Check | Runs |
+| --- | --- |
+| Linux | Clippy and the tests, without the Windows-only installer |
+| Linux AppImage | `scripts/package-linux.sh`, then opens the AppImage on a virtual display and fails if it crashes or quits within 30 seconds. The AppImage is kept as a download on the run for a week. |
 
 A separate **Changelog entry** check (`.github/workflows/changelog.yml`) asks for a `CHANGELOG.md` line when a pull request changes the app. See [Release notes](releasing.md#release-notes).
 

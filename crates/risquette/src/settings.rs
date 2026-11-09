@@ -348,21 +348,24 @@ impl SettingsView {
                 cx.notify();
             })));
         let app_card = section("App", cx)
-            .child(setting("Theme", "Follow Windows, or always use light or dark (Ctrl+Shift+L toggles).", theme, cx))
+            .child(setting("Theme", "Follow your system, or always use light or dark (Ctrl+Shift+L toggles).", theme, cx))
             .child(setting("Open on launch", "Which feed Risquette shows when it starts.", startup, cx))
-            .child(ui::checkbox("s-videos", stored.videos_in_browser, "Open videos in my web browser instead of the built-in player", cx).on_click(
-                cx.listener(|_, _, _, cx| {
-                    crate::storage::update(|s| s.videos_in_browser = !s.videos_in_browser);
-                    cx.notify();
-                }),
-            ))
+            // Only Windows has the built-in player; elsewhere videos always open in the browser.
+            .when(cfg!(windows), |d| {
+                d.child(ui::checkbox("s-videos", stored.videos_in_browser, "Open videos in my web browser instead of the built-in player", cx).on_click(
+                    cx.listener(|_, _, _, cx| {
+                        crate::storage::update(|s| s.videos_in_browser = !s.videos_in_browser);
+                        cx.notify();
+                    }),
+                ))
+            })
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .gap(px(2.))
                     .child(
-                        ui::checkbox("s-desktop-notify", stored.desktop_notifications, "Show Windows notifications", cx)
+                        ui::checkbox("s-desktop-notify", stored.desktop_notifications, "Show desktop notifications", cx)
                         .on_click(cx.listener(|_, _, _, cx| {
                             crate::storage::update(|s| s.desktop_notifications = !s.desktop_notifications);
                             crate::desktop::sync_tray(cx);
@@ -375,7 +378,11 @@ impl SettingsView {
                             .text_size(t.fs.s)
                             .text_color(t.colors.text_light)
                             .child(
-                                "For new replies, mentions and other notifications, while Risquette isn't the window you're using. While this is on, Risquette keeps an icon in the system tray.",
+                                if cfg!(windows) {
+                                    "For new replies, mentions and other notifications, while Risquette isn't the window you're using. While this is on, Risquette keeps an icon in the system tray."
+                                } else {
+                                    "For new replies, mentions and other notifications, while Risquette isn't the window you're using."
+                                },
                             ),
                     ),
             );

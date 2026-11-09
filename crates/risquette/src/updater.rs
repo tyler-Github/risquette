@@ -144,7 +144,7 @@ fn download(release: &Release, progress: &AtomicU64) -> Result<PathBuf, String> 
     let expected = release.sha256.clone().ok_or("This release has no checksum, so it can't be verified. Download it from the release page instead.")?;
     let dir = std::env::temp_dir().join("Risquette");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join(format!("RisquetteSetup-{}-{PLATFORM}.exe", release.version));
+    let path = dir.join(download_name(release));
     let resp = agent().get(&release.url).call().map_err(|e| format!("Download failed: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("Download failed ({})", resp.status()));
@@ -171,6 +171,39 @@ fn download(release: &Release, progress: &AtomicU64) -> Result<PathBuf, String> 
         return Err("The download didn't match its checksum and was discarded.".into());
     }
     Ok(path)
+}
+
+/// The file name to save a release download as: the asset's own name
+/// (`RisquetteSetup-….exe`, `Risquette-….AppImage`) when it looks safe.
+fn download_name(release: &Release) -> String {
+    let from_url = release.url.rsplit('/').next().unwrap_or_default().split('?').next().unwrap_or_default();
+    let safe = !from_url.is_empty() && from_url.chars().all(|c| c.is_ascii_alphanumeric() || "._-".contains(c)) && !from_url.starts_with('.');
+    if safe {
+        from_url.to_string()
+    } else if cfg!(windows) {
+        format!("RisquetteSetup-{}-{PLATFORM}.exe", release.version)
+    } else {
+        format!("Risquette-{}-{PLATFORM}.AppImage", release.version)
+    }
+}
+
+/// Set on the copy an update starts, so it waits for the old copy to quit
+/// instead of handing over to it as a second launch.
+pub const RESTARTED_ENV: &str = "RISQUETTE_RESTARTED";
+
+/// Linux: put the verified download in place of the running AppImage at `current`
+/// (staged next to it, then renamed over it, which is safe while it runs).
+#[cfg(target_os = "linux")]
+fn replace_appimage(downloaded: &std::path::Path, current: &std::path::Path) -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = current.parent().ok_or("The AppImage's folder couldn't be found.")?;
+    let staged = dir.join(".risquette-update.AppImage");
+    std::fs::copy(downloaded, &staged).map_err(|e| format!("Couldn't write the update next to {}: {e}", current.display()))?;
+    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755)).map_err(|e| e.to_string())?;
+    std::fs::rename(&staged, current).map_err(|e| {
+        let _ = std::fs::remove_file(&staged);
+        format!("Couldn't replace {}: {e}", current.display())
+    })
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -315,14 +348,42 @@ impl Updater {
         .detach();
     }
 
-    /// Start the installer in update mode and quit, so it can replace this executable.
+    /// Install the downloaded update and restart.
+    /// Windows: start the installer in update mode and quit, so it can replace this executable.
+    /// Linux: swap in the new AppImage and start it.
     pub fn install(&mut self, cx: &mut Context<Self>) {
         let Status::Ready { installer, .. } = self.status.clone() else { return };
-        let pid = std::process::id().to_string();
-        match std::process::Command::new(&installer).args(["--update", "--wait-pid", &pid, "--launch"]).spawn() {
-            Ok(_) => cx.quit(),
+        #[cfg(windows)]
+        let result = {
+            let pid = std::process::id().to_string();
+            std::process::Command::new(&installer)
+                .args(["--update", "--wait-pid", &pid, "--launch"])
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| format!("Couldn't start the installer: {e}"))
+        };
+        #[cfg(target_os = "linux")]
+        let result = match std::env::var_os("APPIMAGE").map(std::path::PathBuf::from) {
+            Some(current) => replace_appimage(&installer, &current).and_then(|_| {
+                std::process::Command::new(&current)
+                    // This copy still holds the profile until it quits; the new one waits for it.
+                    .env(RESTARTED_ENV, "1")
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| format!("The update was installed, but Risquette couldn't restart: {e}"))
+            }),
+            None => Err("Risquette can only update itself when it runs as an AppImage. Download the new version from risquette.xnoid.studio/releases instead."
+                .to_string()),
+        };
+        #[cfg(not(any(windows, target_os = "linux")))]
+        let result: Result<(), String> = {
+            let _ = &installer;
+            Err("Updates can't be installed automatically on this platform yet.".to_string())
+        };
+        match result {
+            Ok(()) => cx.quit(),
             Err(e) => {
-                self.status = Status::Failed(format!("Couldn't start the installer: {e}").into());
+                self.status = Status::Failed(e.into());
                 cx.notify();
             }
         }
@@ -568,6 +629,34 @@ mod tests {
         assert_eq!(human_size(41_000_000), "41.0 MB");
         assert_eq!(human_size(500), "1 KB");
         assert_eq!(hex(&[0, 255, 16]), "00ff10");
+    }
+
+    #[test]
+    fn downloads_keep_the_asset_name() {
+        let mut r: Release = serde_json::from_str(
+            r#"{"version":"0.3.0","name":"x","url":"https://github.com/x/releases/download/v0.3.0/Risquette-0.3.0-linux-x86_64.AppImage"}"#,
+        )
+        .unwrap();
+        assert_eq!(download_name(&r), "Risquette-0.3.0-linux-x86_64.AppImage");
+        r.url = "https://example.invalid/../../evil name.exe".into();
+        assert!(download_name(&r).starts_with("Risquette"));
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn appimage_is_replaced_in_place() {
+        let dir = std::env::temp_dir().join(format!("risquette-appimage-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (current, downloaded) = (dir.join("Risquette.AppImage"), dir.join("new.AppImage"));
+        std::fs::write(&current, b"old").unwrap();
+        std::fs::write(&downloaded, b"new").unwrap();
+        replace_appimage(&downloaded, &current).unwrap();
+        assert_eq!(std::fs::read(&current).unwrap(), b"new");
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&current).unwrap().permissions().mode() & 0o111, 0o111);
+        assert!(!dir.join(".risquette-update.AppImage").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

@@ -31,6 +31,26 @@ impl Player {
             Player::Page(u) | Player::File(u) => u,
         }
     }
+
+    /// The address to open in a web browser: the provider's normal video page
+    /// rather than its bare embed player (YouTube, Vimeo, Streamable, Dailymotion).
+    pub fn browser_url(&self) -> String {
+        let url = self.url();
+        let Ok(parsed) = Url::parse(url) else { return url.to_string() };
+        let host = parsed.host_str().unwrap_or_default();
+        let path: Vec<&str> = parsed.path_segments().map(|s| s.filter(|p| !p.is_empty()).collect()).unwrap_or_default();
+        let query = |k: &str| parsed.query_pairs().find(|(key, _)| key == k).map(|(_, v)| v.into_owned());
+        match (host, path.as_slice()) {
+            (h, ["embed", id]) if h.ends_with("youtube-nocookie.com") || h.ends_with("youtube.com") => match query("start") {
+                Some(start) => format!("https://www.youtube.com/watch?v={id}&t={start}s"),
+                None => format!("https://www.youtube.com/watch?v={id}"),
+            },
+            ("player.vimeo.com", ["video", id]) => format!("https://vimeo.com/{id}"),
+            ("streamable.com", ["e", id]) => format!("https://streamable.com/{id}"),
+            (h, ["embed", "video", id]) if h.ends_with("dailymotion.com") => format!("https://www.dailymotion.com/video/{id}"),
+            _ => url.to_string(),
+        }
+    }
 }
 
 const VIDEO_EXT: [&str; 4] = [".mp4", ".webm", ".mov", ".m4v"];
@@ -151,6 +171,12 @@ mod tests {
     #[test]
     fn youtube_variants() {
         let base = "https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?autoplay=1&rel=0";
+        assert_eq!(Player::Page(base.into()).browser_url(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+        assert_eq!(Player::Page(format!("{base}&start=42")).browser_url(), "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42s");
+        assert_eq!(Player::Page("https://player.vimeo.com/video/123?autoplay=1".into()).browser_url(), "https://vimeo.com/123");
+        assert_eq!(Player::Page("https://streamable.com/e/abc?autoplay=1".into()).browser_url(), "https://streamable.com/abc");
+        assert_eq!(Player::Page("https://www.dailymotion.com/embed/video/x8?autoplay=1".into()).browser_url(), "https://www.dailymotion.com/video/x8");
+        assert_eq!(Player::File("https://i.imgur.com/a.mp4".into()).browser_url(), "https://i.imgur.com/a.mp4");
         assert_eq!(yt("https://www.youtube.com/watch?v=dQw4w9WgXcQ").as_deref(), Some(base));
         assert_eq!(yt("https://youtu.be/dQw4w9WgXcQ").as_deref(), Some(base));
         assert_eq!(yt("https://m.youtube.com/watch?v=dQw4w9WgXcQ&feature=share").as_deref(), Some(base));
