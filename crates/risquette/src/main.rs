@@ -11,6 +11,7 @@ mod community;
 mod connection;
 mod crash;
 mod desktop;
+mod drafts;
 mod embed;
 mod feed;
 mod icons;
@@ -137,6 +138,12 @@ fn main() {
             KeyBinding::new("ctrl-q", Quit, None),
         ]);
         cx.on_action(|_: &Quit, cx| cx.quit());
+        // Write any unsaved drafts before the app goes (they're also written every second).
+        cx.on_app_quit(|_| {
+            drafts::flush();
+            async {}
+        })
+        .detach();
         cx.on_window_closed(|cx| {
             if cx.windows().is_empty() {
                 cx.quit();

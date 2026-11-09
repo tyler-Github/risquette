@@ -105,6 +105,7 @@ impl Root {
         };
         this.navigate(Target::All, cx);
         this.start_polling(cx);
+        this.watch_for_new_posts(cx);
         this
     }
 
@@ -137,6 +138,34 @@ impl Root {
                 }
             }
         }));
+    }
+
+    /// Once a minute, have the feed on screen (if any) look for new posts. Only
+    /// that feed asks, not the pages behind it, and it does so even while another
+    /// window has focus (Risquette is often left open beside other things).
+    fn watch_for_new_posts(&mut self, cx: &mut Context<Self>) {
+        self._tasks.push(cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor().timer(Duration::from_secs(60)).await;
+                let result = this.update(cx, |this, cx| {
+                    if let Some(feed) = this.current_feed(cx) {
+                        feed.update(cx, |f, cx| f.check_for_new(cx));
+                    }
+                });
+                if result.is_err() {
+                    break;
+                }
+            }
+        }));
+    }
+
+    /// The feed the current page shows: the page itself, or a community's feed.
+    fn current_feed(&self, cx: &App) -> Option<Entity<FeedView>> {
+        let view = self.stack.last()?.view.clone();
+        match view.downcast::<FeedView>() {
+            Ok(feed) => Some(feed),
+            Err(view) => view.downcast::<CommunityView>().ok()?.read(cx).feed(),
+        }
     }
 
     pub fn navigate(&mut self, target: Target, cx: &mut Context<Self>) {

@@ -11,7 +11,7 @@ use crate::{
     state::api_view,
     storage, ui,
 };
-use discuit_api::{FeedItem, FeedQuery, FeedSort, FeedType, ListItem};
+use discuit_api::{FeedItem, FeedQuery, FeedSort, FeedType, ListItem, Post};
 use gpui::{AnyElement, AnyView, Context, FontWeight, ListAlignment, ListState, SharedString, Subscription, Task, Window, div, list, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
@@ -44,7 +44,10 @@ pub struct FeedView {
     aside_on_top: bool,
     /// Bumped whenever the query changes, so stale responses are dropped.
     generation: u64,
+    /// Posts newer than anything shown, found by [`FeedView::check_for_new`].
+    new_posts: usize,
     _load: Option<Task<()>>,
+    _check: Option<Task<()>>,
     _subs: Vec<Subscription>,
 }
 
@@ -90,7 +93,9 @@ impl FeedView {
             aside: None,
             aside_on_top: false,
             generation: 0,
+            new_posts: 0,
             _load: None,
+            _check: None,
             _subs: subs,
         };
         this.load_more(cx);
@@ -171,6 +176,8 @@ impl FeedView {
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.generation += 1;
+        self.new_posts = 0;
+        self._check = None;
         self.items.clear();
         self.list_item_ids.clear();
         self.next = None;
@@ -249,6 +256,51 @@ impl FeedView {
             },
         ));
         cx.notify();
+    }
+
+    /// Look at the feed's first page for posts newer than anything shown, and
+    /// offer them with a "new posts" pill (the feed isn't changed under the
+    /// reader). Only site and community feeds; called while the feed is on screen.
+    pub fn check_for_new(&mut self, cx: &mut Context<Self>) {
+        let community_id = match &self.source {
+            Source::Site(_) => None,
+            Source::Community { id, .. } => Some(id.clone()),
+            _ => return,
+        };
+        if self.loading || self.error.is_some() || self.items.is_empty() || self._check.is_some() {
+            return;
+        }
+        let feed = match &self.source {
+            Source::Site(feed) => *feed,
+            _ => FeedType::Community,
+        };
+        let sort = self.effective_sort();
+        let generation = self.generation;
+        self._check = Some(api_view(
+            cx,
+            move |c| c.feed(&FeedQuery { feed, sort, community_id, limit: Some(PAGE_SIZE), next: None }),
+            move |this, result, cx| {
+                this._check = None;
+                if this.generation != generation {
+                    return;
+                }
+                match result {
+                    Ok(page) => {
+                        let fresh = page.posts.unwrap_or_default().into_iter().map(|p| FeedItem::Post(Box::new(p))).collect();
+                        let fresh: Vec<Post> =
+                            this.filter_muted(fresh, cx).into_iter().filter_map(|i| if let FeedItem::Post(p) = i { Some(*p) } else { None }).collect();
+                        this.new_posts = count_new(&this.items, &fresh);
+                    }
+                    Err(e) => log::debug!("checking for new posts: {e}"),
+                }
+            },
+        ));
+    }
+
+    /// Show the new posts: reload from the top.
+    fn show_new_posts(&mut self, cx: &mut Context<Self>) {
+        self.refresh(cx);
+        self.list.scroll_to(gpui::ListOffset::default());
     }
 
     fn filter_muted(&self, items: Vec<FeedItem>, cx: &Context<Self>) -> Vec<FeedItem> {
@@ -423,9 +475,49 @@ impl FeedView {
 
 impl Render for FeedView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let main = list(self.list.clone(), cx.processor(Self::render_row)).size_full();
+        let t = *cx.theme();
+        let new_posts = self.new_posts;
+        let main = div().relative().size_full().child(list(self.list.clone(), cx.processor(Self::render_row)).size_full()).when(new_posts > 0, |d| {
+            let label = match new_posts {
+                1 => "1 new post".to_string(),
+                n if n >= PAGE_SIZE as usize => format!("{n}+ new posts"),
+                n => format!("{n} new posts"),
+            };
+            // Floats over the top of the feed, centred.
+            d.child(
+                div().absolute().top(px(14.)).left_0().right_0().flex().justify_center().child(
+                    div()
+                        .id("feed-new-posts")
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .px(px(14.))
+                        .py(px(7.))
+                        .rounded_full()
+                        .bg(t.colors.button_main)
+                        .hover(|s| s.bg(t.colors.button_main_hover))
+                        .text_color(t.colors.button_main_text)
+                        .text_size(t.fs.s)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .shadow_lg()
+                        .cursor_pointer()
+                        .child(icons::icon(Icon::ChevronUp, t.colors.button_main_text))
+                        .child(label)
+                        .on_click(cx.listener(|this, _, _, cx| this.show_new_posts(cx))),
+                ),
+            )
+        });
         layout::with_aside(main, self.aside.clone().map(|a| a.into_any_element()), self.aside_on_top, window)
     }
+}
+
+/// How many of `fresh` (the feed's first page now) are newer than every post in
+/// `shown` and not already there. Pinned posts don't count as the newest shown.
+fn count_new(shown: &[FeedItem], fresh: &[Post]) -> usize {
+    let posts = || shown.iter().filter_map(|i| if let FeedItem::Post(p) = i { Some(p) } else { None });
+    let Some(newest) = posts().filter(|p| !p.is_pinned && !p.is_pinned_site).map(|p| p.created_at).max() else { return 0 };
+    let ids: std::collections::HashSet<&str> = posts().map(|p| p.id.as_str()).collect();
+    fresh.iter().filter(|p| p.created_at > newest && !ids.contains(p.id.as_str())).count()
 }
 
 fn sort_icon(sort: FeedSort) -> Icon {
@@ -484,4 +576,29 @@ pub fn sort_dropdown(
                 .collect();
             crate::nav::open_menu(pos, items, cx);
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn post(id: &str, minutes_ago: i64, pinned: bool) -> Post {
+        let mut p: Post = serde_json::from_value(serde_json::json!({ "id": id, "publicId": id, "title": id, "createdAt": "2026-01-01T00:00:00Z" })).unwrap();
+        p.created_at = chrono::Utc::now() - chrono::Duration::minutes(minutes_ago);
+        p.is_pinned_site = pinned;
+        p
+    }
+
+    #[test]
+    fn only_posts_newer_than_the_feed_count() {
+        let shown: Vec<FeedItem> = [post("a", 30, false), post("b", 60, false)].into_iter().map(|p| FeedItem::Post(Box::new(p))).collect();
+        // Two newer posts, one already shown, one older that only now ranks high.
+        let fresh = [post("n1", 5, false), post("n2", 10, false), post("a", 30, false), post("old", 90, false)];
+        assert_eq!(count_new(&shown, &fresh), 2);
+        // An old pinned post at the top doesn't hide what came after it.
+        let mut with_pin = vec![FeedItem::Post(Box::new(post("pin", 1, true)))];
+        with_pin.extend(shown.iter().cloned());
+        assert_eq!(count_new(&with_pin, &fresh), 2);
+        assert_eq!(count_new(&[], &fresh), 0);
+    }
 }
