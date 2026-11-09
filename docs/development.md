@@ -97,6 +97,13 @@ Every pull request and push to `main` runs `.github/workflows/ci.yml`. All of th
 | Docs and links | `python scripts/check_docs.py` (every local link and image in the Markdown exists), plus `python scripts/changelog.py check` and the changelog script's tests |
 | Dependency audit | `cargo audit` against the RustSec advisory database |
 
+Two Linux checks run alongside them, on Ubuntu 22.04 like the release build:
+
+| Check | Runs |
+| --- | --- |
+| Linux | Clippy and the tests, without the Windows-only installer |
+| Linux AppImage | `scripts/package-linux.sh`, then opens the AppImage on a virtual display and fails if it crashes or quits within 30 seconds. The AppImage is kept as a download on the run for a week. |
+
 A separate **Changelog entry** check (`.github/workflows/changelog.yml`) asks for a `CHANGELOG.md` line when a pull request changes the app. See [Release notes](releasing.md#release-notes).
 
 Dependabot opens weekly pull requests for Cargo and GitHub Actions updates. GPUI, wry and windows are left alone because their versions must match. Third-party actions are pinned to exact commits.

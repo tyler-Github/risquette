@@ -54,6 +54,22 @@ fn startup_target(arg: &str, client: &Client) -> Option<nav::Target> {
     nav::target_for_path(&path)
 }
 
+/// Claim this profile. After an update on Linux the new copy is started by the
+/// old one just before it quits (`RISQUETTE_RESTARTED`), so wait for it to let go.
+fn claim_instance() -> desktop::Instance {
+    let mut instance = desktop::claim_instance();
+    if std::env::var_os(updater::RESTARTED_ENV).is_some() {
+        for _ in 0..50 {
+            if matches!(instance, desktop::Instance::First) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            instance = desktop::claim_instance();
+        }
+    }
+    instance
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     crash::init_logging();
@@ -70,7 +86,7 @@ fn main() {
     // One window: if Risquette is already running (with these settings), bring it
     // to the front instead. The pop-out video player (`--play`) is exempt.
     let play_mode = args.first().is_some_and(|a| a == "--play");
-    if !play_mode && matches!(desktop::claim_instance(), desktop::Instance::AlreadyRunning) {
+    if !play_mode && matches!(claim_instance(), desktop::Instance::AlreadyRunning) {
         log::info!("Risquette is already running; bringing its window to the front");
         desktop::focus_running_instance();
         return;

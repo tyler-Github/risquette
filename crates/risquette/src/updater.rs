@@ -187,6 +187,10 @@ fn download_name(release: &Release) -> String {
     }
 }
 
+/// Set on the copy an update starts, so it waits for the old copy to quit
+/// instead of handing over to it as a second launch.
+pub const RESTARTED_ENV: &str = "RISQUETTE_RESTARTED";
+
 /// Linux: put the verified download in place of the running AppImage at `current`
 /// (staged next to it, then renamed over it, which is safe while it runs).
 #[cfg(target_os = "linux")]
@@ -361,7 +365,12 @@ impl Updater {
         #[cfg(target_os = "linux")]
         let result = match std::env::var_os("APPIMAGE").map(std::path::PathBuf::from) {
             Some(current) => replace_appimage(&installer, &current).and_then(|_| {
-                std::process::Command::new(&current).spawn().map(|_| ()).map_err(|e| format!("The update was installed, but Risquette couldn't restart: {e}"))
+                std::process::Command::new(&current)
+                    // This copy still holds the profile until it quits; the new one waits for it.
+                    .env(RESTARTED_ENV, "1")
+                    .spawn()
+                    .map(|_| ())
+                    .map_err(|e| format!("The update was installed, but Risquette couldn't restart: {e}"))
             }),
             None => Err("Risquette can only update itself when it runs as an AppImage. Download the new version from risquette.xnoid.studio/releases instead."
                 .to_string()),

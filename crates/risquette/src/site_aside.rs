@@ -52,9 +52,10 @@ impl Render for SiteAside {
                 d.child(
                     div()
                         .flex()
-                        .flex_col()
+                        .items_baseline()
+                        .gap(px(6.))
                         .child(div().font_weight(FontWeight::BOLD).text_size(t.fs.l).child(ui::compact(users)))
-                        .child(div().text_size(t.fs.xs).text_color(t.colors.text_light).child("people on Discuit")),
+                        .child(div().text_size(t.fs.s).text_color(t.colors.text_light).child("people on Discuit")),
                 )
             })
             .child(

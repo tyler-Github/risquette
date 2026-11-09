@@ -100,6 +100,57 @@ jobs:
       - run: cargo clippy --workspace --exclude risquette-installer --all-targets --locked -- -D warnings
       - run: cargo test --workspace --exclude risquette-installer --locked
 
+  appimage:
+    name: Linux AppImage
+    # Packages the AppImage the way a release does, then opens it on a virtual
+    # display, so packaging and start-up problems show up before a release.
+    # The AppImage is kept for a week, for trying the change by hand.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          xargs -a packaging/linux/build-deps.txt sudo apt-get install -y --no-install-recommends
+          # A virtual display and a software Vulkan driver, to open the app without a screen or GPU.
+          sudo apt-get install -y --no-install-recommends xvfb mesa-vulkan-drivers
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: linux-release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: ./scripts/package-linux.sh
+      - name: Open the app
+        run: |
+          app="$(ls dist/*.AppImage)"
+          profile="$RUNNER_TEMP/profile"
+          export RISQUETTE_CONFIG_DIR="$profile" RISQUETTE_WINDOWED=1 APPIMAGE_EXTRACT_AND_RUN=1
+          # Still running after 30 seconds (timeout's exit code 124) means it started.
+          set +e
+          timeout 30 xvfb-run -a -s "-screen 0 1280x900x24" "$app"
+          code=$?
+          set -e
+          echo "--- log"
+          cat "$profile"/logs/*.log 2>/dev/null || echo "(no log)"
+          if ls "$profile"/crashes/crash-* >/dev/null 2>&1; then
+            echo "--- crash report"
+            cat "$profile"/crashes/crash-*
+            exit 1
+          fi
+          if [ "$code" -ne 124 ]; then
+            echo "The app exited with code $code instead of staying open."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: appimage
+          path: dist/*
+          retention-days: 7
+
   docs:
     name: Docs and links
     runs-on: ubuntu-latest

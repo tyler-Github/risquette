@@ -67,6 +67,7 @@ fn profile_key() -> String {
     format!("{hash:016x}")
 }
 
+#[cfg(windows)]
 fn pid_file() -> Option<std::path::PathBuf> {
     Some(storage::dir()?.join("instance.pid"))
 }

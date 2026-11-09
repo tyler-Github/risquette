@@ -14,7 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Opening a video in your web browser now opens its normal page (on YouTube, Vimeo, Streamable or Dailymotion) instead of a bare player.
 
-## [0.2.0-beta.1] - 2026-11-07
+## [0.2.0] - 2026-11-08
 
 ### Added
 
@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - If Risquette crashes, it now shows a window explaining what happened, with a button that opens a bug report on GitHub with the details already filled in. You can also restart the app or copy the details from there.
 - Risquette keeps a log file and saves crash reports, which help us track down problems.
 - A Help & troubleshooting section in Settings, with links to report a problem and to open the logs folder.
+- Posts and comments now show tables, task lists with checkboxes, footnotes and smaller headings (levels 4 to 6), as on the Discuit website.
 
 ### Changed
 
@@ -30,6 +31,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Risquette now opens maximized.
 - The setup wizard now says "Reinstall" rather than "Update" when the same version is already installed.
 - Choosing "Also remove my settings and saved logins" when uninstalling now removes logs and crash reports too.
+- HTML tags in posts and comments are now hidden instead of shown as text, and images written in markdown show their address as a link, as on the Discuit website.
+- The member count in the Discuit side panel now reads as one line, such as "12k people on Discuit".
 
 ### Fixed
 
@@ -37,6 +40,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The "Log in" and "Create account" buttons in the sidebar, and a few buttons in side panels, no longer shrink to fit their text.
 - Opening `uninstall.exe` from the install folder now opens the uninstaller instead of the setup wizard.
 - Text boxes in Settings and the "Save to list" dialog no longer shrink to a sliver after the page refreshes.
+- Text in Settings, Communities, Lists, Mod tools and Admin no longer runs past the edge of its card when the window is wide.
 
 ## [0.1.0] - 2026-11-07
 
@@ -55,6 +59,6 @@ The first release of Risquette, a desktop client for Discuit.
 - Light and dark themes.
 - A setup wizard that installs without administrator rights, and automatic updates.
 
-[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.2.0-beta.1...HEAD
-[0.2.0-beta.1]: https://github.com/tyler-Github/risquette/compare/v0.1.0...v0.2.0-beta.1
+[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/tyler-Github/risquette/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-Github/risquette/releases/tag/v0.1.0

@@ -9,6 +9,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 
 - **Feeds:** Home (your joined communities) and All, sorted by Hot, New, Activity or Top, with infinite scroll.
 - **Posts:** text, image and link posts. Image posts with several pictures open as a carousel with captions. YouTube, Vimeo, Streamable, Dailymotion and direct video links play in a pop-out player, or in your browser if you prefer.
+- **Formatting:** posts and comments render markdown as the Discuit website does, including tables, task lists, footnotes and code blocks. `@username` mentions and bare web addresses become links.
 - **Comments:** threaded and collapsible, with thread guides, inline replies and "show more replies".
 - **Communities:** banner, about, rules and moderators. Browse and search all communities.
 - **Profiles:** about text, badges, stats, moderated communities, and the user's posts and comments.
