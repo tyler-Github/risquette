@@ -16,6 +16,11 @@ updates:
       - dependency-name: gpui
       - dependency-name: wry
       - dependency-name: windows
+      # libc 0.2.190 dropped ENOATTR on Linux, which xattr 0.2.3 (pulled in by
+      # GPUI's HTTP client) needs, so the Linux build fails. Held at 0.2.189 in
+      # Cargo.lock until GPUI moves to a newer xattr.
+      - dependency-name: libc
+        versions: [">= 0.2.190"]
 
   - package-ecosystem: github-actions
     directory: /
