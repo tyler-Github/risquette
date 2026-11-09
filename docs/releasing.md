@@ -111,4 +111,4 @@ The official server runs at `https://risquette.xnoid.studio` on Fly.io, behind C
 | `CACHE_SECONDS` | How long to cache release data (default 300). |
 | `BIND` | Listen address (default `0.0.0.0:8787`). |
 
-The app calls `GET /v1/updates/windows-x86_64?channel=stable&current=<version>`. Users can point the app at a different server in Settings → Updates.
+The app calls `GET /v1/updates/<platform>?channel=stable&current=<version>`, where the platform is `windows-x86_64` or `linux-x86_64`. Users can point the app at a different server in Settings → Updates.

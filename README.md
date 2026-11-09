@@ -4,7 +4,7 @@
 </picture>
 
 <p align="center">
-  <a href="https://github.com/tyler-Github/risquette/releases/latest"><img alt="Download" src="https://img.shields.io/badge/Download-Windows-6b02f2?style=for-the-badge&logo=windows11&logoColor=white"></a>
+  <a href="https://github.com/tyler-Github/risquette/releases/latest"><img alt="Download for Windows and Linux" src="https://img.shields.io/badge/Download-Windows%20%7C%20Linux-6b02f2?style=for-the-badge"></a>
   <a href="https://risquette.xnoid.studio"><img alt="Website" src="https://img.shields.io/badge/Website-risquette.xnoid.studio-18102c?style=for-the-badge&logoColor=white"></a>
 </p>
 
@@ -26,8 +26,8 @@
 |  |  |
 | --- | --- |
 | **Native and fast**<br>Written in Rust on [GPUI](https://gpui.rs), the UI framework behind the Zed editor. | **Everything Discuit does**<br>Feeds, posts, threaded comments, notifications, saved lists, mod tools and admin. |
-| **Any instance**<br>Use discuit.org or any other Discuit server, with a separate login for each. | **Media done right**<br>Image carousels, plus pop-out players for YouTube, Vimeo and other videos. |
-| **Light and dark**<br>Themes based on Discuit's own design, following your system. | **Updates itself**<br>A branded installer and updater, with every download checksum-verified. |
+| **Any instance**<br>Use discuit.org or any other Discuit server, with a separate login for each. | **Media done right**<br>Image carousels, plus a pop-out player for YouTube, Vimeo and other videos on Windows. |
+| **Light and dark**<br>Themes based on Discuit's own design, following your system. | **Windows and Linux**<br>A per-user installer on Windows and an AppImage on Linux. Both update themselves, and every download is checksum-verified. |
 
 <p align="center">
   <picture>
@@ -38,10 +38,10 @@
 
 ## Install
 
-Download **RisquetteSetup** from the [latest release](https://github.com/tyler-Github/risquette/releases/latest) and run it. It installs just for you, with no administrator rights, and keeps itself up to date.
+Download Risquette from the [latest release](https://github.com/tyler-Github/risquette/releases/latest). It needs no administrator rights and keeps itself up to date.
 
-- **Windows 10 and 11:** run the installer. Windows may show a SmartScreen warning the first time; choose **More info → Run anyway**.
-- **Linux:** download the AppImage, make it executable (`chmod +x Risquette-*.AppImage`, or tick "Allow executing as program" in its properties) and open it. It runs on most distributions and updates itself.
+- **Windows 10 and 11:** run **RisquetteSetup**. It installs just for you. Windows may show a SmartScreen warning the first time; choose **More info → Run anyway**.
+- **Linux (beta):** Linux support is in beta, so for now the AppImage comes with the [newest pre-release](https://risquette.xnoid.studio/releases). Download it, make it executable (`chmod +x Risquette-*.AppImage`, or tick "Allow executing as program" in its properties) and open it. It runs on most distributions and updates itself.
 
 Every release publishes SHA-256 checksums next to the downloads, and [risquette.xnoid.studio/releases](https://risquette.xnoid.studio/releases) lists every version.
 
