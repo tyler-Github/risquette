@@ -7,7 +7,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 
 ## Reading
 
-- **Feeds:** Home (your joined communities) and All, sorted by Hot, New, Activity or Top, with infinite scroll.
+- **Feeds:** Home (your joined communities) and All, sorted by Hot, New, Activity or Top, with infinite scroll. While you read, Risquette checks the feed on screen once a minute and offers new posts with a "3 new posts" button at the top, instead of moving the feed under you.
 - **Posts:** text, image and link posts. Image posts with several pictures open as a carousel with captions. YouTube, Vimeo, Streamable, Dailymotion and direct video links play in a pop-out player, or in your browser if you prefer.
 - **Formatting:** posts and comments render markdown as the Discuit website does, including tables, task lists, footnotes and code blocks. `@username` mentions and bare web addresses become links.
 - **Comments:** threaded and collapsible, with thread guides, inline replies and "show more replies".
@@ -32,6 +32,7 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 - **Accounts:** log in, sign up and log out. Your session is remembered between launches.
 - **Multiple accounts:** stay logged in to several accounts and switch between them from the account menu or Settings → Accounts. Logging out of one switches to the next.
 - **Voting, commenting and posting:** with a markdown toolbar and preview, drag-and-drop image uploads, community suggestions, and a "fetch title" button for links.
+- **Drafts:** unsent comments, replies and posts are kept as you type, so leaving the page, closing Risquette or a failed send doesn't lose them. They come back when you return, with a note and a **Discard** link, and are removed once sent. Images in a new post aren't kept, and drafts are forgotten after 30 days.
 - **Post and comment menus:** save to a list, copy the link, hide, report, mute, edit and delete.
 - **Notifications:** a bell in the toolbar with an unread counter. You can mark notifications read or unread and delete them, one at a time or all at once.
 - **Desktop notifications:** new notifications also appear as desktop notifications while Risquette isn't the window you're using. Clicking one opens it in the app. They're off by default; turn them on in Settings → App. On Windows, a tray icon is shown while they're on: click it to bring the window back, or right-click to quit.

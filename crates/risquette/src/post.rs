@@ -35,6 +35,10 @@ struct Composer {
     busy: bool,
     error: Option<SharedString>,
     as_mod: bool,
+    /// Where its unsent text is kept (see [`crate::drafts`]).
+    draft_key: String,
+    /// It opened with text from a saved draft.
+    restored: bool,
     _sub: Subscription,
 }
 
@@ -61,7 +65,7 @@ pub struct PostView {
 
 impl PostView {
     pub fn new(public_id: String, cx: &mut Context<Self>) -> Self {
-        let composer = Self::make_composer(None, cx);
+        let composer = Self::make_composer(None, crate::drafts::key("comment", &public_id, cx), cx);
         let subs = vec![
             cx.subscribe(&bus::entity(cx), |this, _, ev: &ContentEvent, cx| this.on_content(ev, cx)),
             // Reload a post that failed to load once back online.
@@ -93,20 +97,22 @@ impl PostView {
         this
     }
 
-    fn make_composer(parent: Option<String>, cx: &mut Context<Self>) -> Composer {
+    /// A composer for a top-level comment (`parent` None) or a reply, opened with its saved draft if any.
+    fn make_composer(parent: Option<String>, draft_key: String, cx: &mut Context<Self>) -> Composer {
+        let draft = crate::drafts::get(&draft_key).map(|d| d.field("body").to_string()).unwrap_or_default();
+        let restored = !draft.trim().is_empty();
         let input = cx.new(|cx| {
-            TextInput::new(cx).multiline(if parent.is_some() { 3 } else { 4 }).placeholder(if parent.is_some() {
-                "Write a reply… (Ctrl+Enter to send)"
-            } else {
-                "Add a comment… (markdown, Ctrl+Enter to send)"
-            })
+            TextInput::new(cx)
+                .multiline(if parent.is_some() { 3 } else { 4 })
+                .placeholder(if parent.is_some() { "Write a reply… (Ctrl+Enter to send)" } else { "Add a comment… (markdown, Ctrl+Enter to send)" })
+                .with_text(draft)
         });
-        let sub = cx.subscribe(&input, move |this: &mut Self, _, ev: &InputEvent, cx| {
-            if *ev == InputEvent::Submit {
-                this.submit_comment(parent.clone(), cx);
-            }
+        let key = draft_key.clone();
+        let sub = cx.subscribe(&input, move |this: &mut Self, input, ev: &InputEvent, cx| match ev {
+            InputEvent::Submit => this.submit_comment(parent.clone(), cx),
+            InputEvent::Changed => crate::drafts::set_body(&key, input.read(cx).text()),
         });
-        Composer { input, busy: false, error: None, as_mod: false, _sub: sub }
+        Composer { input, busy: false, error: None, as_mod: false, draft_key, restored, _sub: sub }
     }
 
     pub fn title(&self) -> SharedString {
@@ -253,7 +259,7 @@ impl PostView {
         if self.reply.as_ref().is_some_and(|(id, _)| id == &comment_id) {
             self.reply = None;
         } else {
-            let composer = Self::make_composer(Some(comment_id.clone()), cx);
+            let composer = Self::make_composer(Some(comment_id.clone()), crate::drafts::key("reply", &comment_id, cx), cx);
             composer.input.read(cx).focus(window);
             self.reply = Some((comment_id, composer));
         }
@@ -295,6 +301,9 @@ impl PostView {
                     Ok(comment) => {
                         if let Some(c) = composer {
                             c.busy = false;
+                            c.restored = false;
+                            // Sent: forget the draft (a reply's box closes before its change event would).
+                            crate::drafts::remove(&c.draft_key);
                             c.input.update(cx, |i, cx| i.clear(cx));
                         }
                         if parent.is_some() {
@@ -515,6 +524,31 @@ impl PostView {
             .flex()
             .flex_col()
             .gap(px(8.))
+            .when(composer.restored, |d| {
+                let parent_discard = parent.clone();
+                d.child(
+                    div().flex().items_center().gap(px(6.)).text_size(t.fs.s).text_color(t.colors.text_light).child("Restored your unsent draft.").child(
+                        div()
+                            .id(SharedString::from(format!("{id}-discard")))
+                            .cursor_pointer()
+                            .text_color(t.colors.link)
+                            .hover(|s| s.underline())
+                            .child("Discard")
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let c = match &parent_discard {
+                                    Some(_) => this.reply.as_mut().map(|(_, c)| c),
+                                    None => Some(&mut this.composer),
+                                };
+                                if let Some(c) = c {
+                                    c.restored = false;
+                                    // Emptying the box removes the draft.
+                                    c.input.update(cx, |i, cx| i.clear(cx));
+                                }
+                                cx.notify();
+                            })),
+                    ),
+                )
+            })
             .child(composer.input.clone())
             .when_some(composer.error.clone(), |d, e| d.child(div().text_size(t.fs.s).text_color(t.colors.red).child(e)))
             .child(
@@ -542,6 +576,10 @@ impl PostView {
                             .gap(px(8.))
                             .when(parent.is_some(), |d| {
                                 d.child(ui::button(SharedString::from(format!("{id}-cancel")), "Cancel", cx).on_click(cx.listener(|this, _, _, cx| {
+                                    // Cancelling is deliberate, so the reply's draft goes too.
+                                    if let Some((_, c)) = &this.reply {
+                                        crate::drafts::remove(&c.draft_key);
+                                    }
                                     this.reply = None;
                                     this.rebuild_rows();
                                     cx.notify();

@@ -52,19 +52,45 @@ pub struct NewPostView {
     /// Show the rendered markdown instead of the editor.
     preview: bool,
     next_key: u64,
+    /// Where the unsent post is kept (see [`crate::drafts`]).
+    draft_key: String,
+    /// The form opened with a saved draft.
+    restored: bool,
     _subs: Vec<Subscription>,
     _tasks: Vec<Task<()>>,
 }
 
+fn kind_name(kind: PostType) -> &'static str {
+    match kind {
+        PostType::Image => "image",
+        PostType::Link => "link",
+        _ => "text",
+    }
+}
+
+fn kind_from_name(name: &str) -> PostType {
+    match name {
+        "image" => PostType::Image,
+        "link" => PostType::Link,
+        _ => PostType::Text,
+    }
+}
+
 impl NewPostView {
     pub fn new(community: Option<String>, cx: &mut Context<Self>) -> Self {
+        // A post started from a community keeps its draft for that community; one started from scratch, its own.
+        let draft_key = crate::drafts::key("post", community.as_deref().unwrap_or_default(), cx);
+        let draft = crate::drafts::get(&draft_key).unwrap_or_default();
+        let community = community.or_else(|| Some(draft.field("community").to_string()).filter(|c| !c.trim().is_empty()));
         let community_input = cx.new(|cx| TextInput::new(cx).placeholder("Community name").with_text(community.clone().unwrap_or_default()));
-        let title = cx.new(|cx| TextInput::new(cx).placeholder("Title").max_len(255));
-        let body = cx.new(|cx| TextInput::new(cx).multiline(10).placeholder("Body (markdown supported)"));
-        let url = cx.new(|cx| TextInput::new(cx).icon(Icon::Link).placeholder("https://example.com"));
+        let title = cx.new(|cx| TextInput::new(cx).placeholder("Title").max_len(255).with_text(draft.field("title")));
+        let body = cx.new(|cx| TextInput::new(cx).multiline(10).placeholder("Body (markdown supported)").with_text(draft.field("body")));
+        let url = cx.new(|cx| TextInput::new(cx).icon(Icon::Link).placeholder("https://example.com").with_text(draft.field("url")));
+        let restored = ["title", "body", "url"].iter().any(|f| !draft.field(f).trim().is_empty());
         let mut subs = Vec::new();
         subs.push(cx.subscribe(&community_input, |this: &mut Self, _, ev: &InputEvent, cx| {
             if *ev == InputEvent::Changed {
+                this.save_draft(cx);
                 if std::mem::take(&mut this.suppress_search) {
                     return;
                 }
@@ -72,8 +98,15 @@ impl NewPostView {
                 this.search_communities(cx);
             }
         }));
+        for input in [&title, &body, &url] {
+            subs.push(cx.subscribe(input, |this: &mut Self, _, ev: &InputEvent, cx| {
+                if *ev == InputEvent::Changed {
+                    this.save_draft(cx);
+                }
+            }));
+        }
         let mut this = Self {
-            kind: PostType::Text,
+            kind: if restored { kind_from_name(draft.field("kind")) } else { PostType::Text },
             community: community_input,
             suggestions: Vec::new(),
             show_suggestions: false,
@@ -91,6 +124,8 @@ impl NewPostView {
             chosen: None,
             preview: false,
             next_key: 0,
+            draft_key,
+            restored,
             _subs: subs,
             _tasks: Vec::new(),
         };
@@ -98,6 +133,34 @@ impl NewPostView {
             this.load_aside(name, cx);
         }
         this
+    }
+
+    /// Keep what's typed so far (images aren't kept: they'd need uploading again).
+    fn save_draft(&self, cx: &Context<Self>) {
+        let text = |input: &Entity<TextInput>| input.read(cx).text().to_string();
+        let mut fields = std::collections::BTreeMap::from([
+            ("title".to_string(), text(&self.title)),
+            ("body".to_string(), text(&self.body)),
+            ("url".to_string(), text(&self.url)),
+        ]);
+        // A blank title, body and link leave nothing worth keeping, whatever the community or type.
+        if fields.values().all(|v| v.trim().is_empty()) {
+            crate::drafts::remove(&self.draft_key);
+            return;
+        }
+        fields.insert("community".to_string(), text(&self.community));
+        fields.insert("kind".to_string(), kind_name(self.kind).to_string());
+        crate::drafts::set(&self.draft_key, fields);
+    }
+
+    /// Throw away the restored draft: empty the form and forget it.
+    fn discard_draft(&mut self, cx: &mut Context<Self>) {
+        self.restored = false;
+        for input in [&self.title, &self.body, &self.url] {
+            input.update(cx, |i, cx| i.clear(cx));
+        }
+        crate::drafts::remove(&self.draft_key);
+        cx.notify();
     }
 
     fn search_communities(&mut self, cx: &mut Context<Self>) {
@@ -350,7 +413,10 @@ impl NewPostView {
             |this, r, cx| {
                 this.busy = false;
                 match r {
-                    Ok(p) => nav::go(Target::Post { public_id: p.public_id }, cx),
+                    Ok(p) => {
+                        crate::drafts::remove(&this.draft_key);
+                        nav::go(Target::Post { public_id: p.public_id }, cx);
+                    }
                     Err(e) => this.error = Some(e.user_message().into()),
                 }
             },
@@ -384,6 +450,7 @@ impl NewPostView {
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.kind = kind;
                     this.error = None;
+                    this.save_draft(cx);
                     cx.notify();
                 }))
         };
@@ -786,11 +853,31 @@ impl Render for NewPostView {
                     ),
             );
 
+        let restored_note = self.restored.then(|| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .text_size(t.fs.s)
+                .text_color(t.colors.text_light)
+                .child(icons::icon(Icon::FileText, t.colors.text_light))
+                .child("Restored your unsent post.")
+                .child(
+                    div()
+                        .id("np-discard")
+                        .cursor_pointer()
+                        .text_color(t.colors.link)
+                        .hover(|s| s.underline())
+                        .child("Discard")
+                        .on_click(cx.listener(|this, _, _, cx| this.discard_draft(cx))),
+                )
+        });
         let form = ui::card(cx)
             .p(px(20.))
             .flex()
             .flex_col()
             .gap(px(16.))
+            .children(restored_note)
             .child(self.segmented(cx))
             .child(self.community_field(cx))
             .child(self.title_field(cx))

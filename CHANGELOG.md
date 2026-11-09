@@ -8,6 +8,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Drafts: unsent comments, replies and posts are kept as you type and come back when you return, even after closing Risquette, with a **Discard** link if you don't want them. They're removed once sent.
+- While you're reading a feed, Risquette checks for new posts once a minute and shows a "new posts" button at the top. Click it to see them; the feed doesn't move under you otherwise.
+
+### Added
+
 - When Discuit can't be reached, Risquette shows a reconnecting screen that counts down to its next attempt, with **Try now** and a way into Settings if you need a different server. Once the connection is back it picks up where you left off: pages that failed to load, missing images and your account load without a restart. Nothing you send is repeated.
 
 ### Changed
