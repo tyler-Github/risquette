@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0-beta.1] - 2026-11-09
+
 ### Added
 
 - Risquette now runs on Linux. Download the AppImage, make it executable and open it: it works on most distributions and updates itself like the Windows version. Desktop notifications use your desktop's notification system, and videos open in your web browser.
@@ -59,6 +61,7 @@ The first release of Risquette, a desktop client for Discuit.
 - Light and dark themes.
 - A setup wizard that installs without administrator rights, and automatic updates.
 
-[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.3.0-beta.1...HEAD
+[0.3.0-beta.1]: https://github.com/tyler-Github/risquette/compare/v0.2.0...v0.3.0-beta.1
 [0.2.0]: https://github.com/tyler-Github/risquette/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-Github/risquette/releases/tag/v0.1.0
