@@ -62,7 +62,15 @@ pub struct PostView {
 impl PostView {
     pub fn new(public_id: String, cx: &mut Context<Self>) -> Self {
         let composer = Self::make_composer(None, cx);
-        let subs = vec![cx.subscribe(&bus::entity(cx), |this, _, ev: &ContentEvent, cx| this.on_content(ev, cx))];
+        let subs = vec![
+            cx.subscribe(&bus::entity(cx), |this, _, ev: &ContentEvent, cx| this.on_content(ev, cx)),
+            // Reload a post that failed to load once back online.
+            crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+                if this.error.is_some() {
+                    this.load(cx);
+                }
+            }),
+        ];
         let mut this = Self {
             public_id,
             post: None,

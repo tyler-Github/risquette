@@ -9,7 +9,7 @@ use crate::{
     ui,
 };
 use discuit_api::{List, ListPatch, NewList};
-use gpui::{Context, FontWeight, SharedString, Task, Window, div, prelude::*, px};
+use gpui::{Context, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct ListsView {
@@ -19,6 +19,7 @@ pub struct ListsView {
     error: Option<SharedString>,
     _task: Option<Task<()>>,
     _owner_task: Option<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl ListsView {
@@ -33,7 +34,13 @@ impl ListsView {
                 }
             },
         );
-        let mut this = Self { username, owner: None, lists: None, error: None, _task: None, _owner_task: Some(owner_task) };
+        // Reload once back online if loading failed.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.refresh(cx);
+            }
+        });
+        let mut this = Self { username, owner: None, lists: None, error: None, _task: None, _owner_task: Some(owner_task), _reconnect: reconnect };
         this.refresh(cx);
         this
     }

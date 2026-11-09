@@ -89,6 +89,7 @@ icons! {
     TrendingUp => "trending-up",
     Upload => "upload",
     User => "user",
+    WifiOff => "wifi-off",
     VolumeX => "volume-x",
     X => "x",
 }

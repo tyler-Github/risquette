@@ -11,7 +11,7 @@ use crate::{
     ui,
 };
 use discuit_api::User;
-use gpui::{Context, Entity, FontWeight, SharedString, Task, Window, div, prelude::*, px};
+use gpui::{Context, Entity, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct UserView {
@@ -19,11 +19,18 @@ pub struct UserView {
     feed: Option<Entity<FeedView>>,
     error: Option<SharedString>,
     _task: Option<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl UserView {
     pub fn new(username: String, cx: &mut Context<Self>) -> Self {
-        let mut this = Self { username, feed: None, error: None, _task: None };
+        // Reload once back online if loading failed.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.refresh(cx);
+            }
+        });
+        let mut this = Self { username, feed: None, error: None, _task: None, _reconnect: reconnect };
         this.refresh(cx);
         this
     }

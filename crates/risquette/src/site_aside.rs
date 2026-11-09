@@ -9,18 +9,30 @@ use crate::{
     ui,
 };
 use discuit_api::Community;
-use gpui::{Context, FontWeight, Task, Window, div, prelude::*, px};
+use gpui::{Context, FontWeight, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct SiteAside {
     popular: Vec<Community>,
     _task: Option<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl SiteAside {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let mut this = Self { popular: Vec::new(), _task: None };
-        this._task = Some(api_view(
+        // Fill the list once back online if it couldn't load.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.popular.is_empty() {
+                this.load(cx);
+            }
+        });
+        let mut this = Self { popular: Vec::new(), _task: None, _reconnect: reconnect };
+        this.load(cx);
+        this
+    }
+
+    fn load(&mut self, cx: &mut Context<Self>) {
+        self._task = Some(api_view(
             cx,
             |c| c.communities(Some("default"), None, None, Some(50)),
             |this, r, _| {
@@ -31,7 +43,6 @@ impl SiteAside {
                 }
             },
         ));
-        this
     }
 }
 

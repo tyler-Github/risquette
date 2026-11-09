@@ -9,7 +9,7 @@ use crate::{
     ui,
 };
 use discuit_api::Notification;
-use gpui::{Context, FontWeight, SharedString, Task, Window, div, prelude::*, px};
+use gpui::{Context, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub struct NotificationsView {
@@ -21,11 +21,19 @@ pub struct NotificationsView {
     loading: bool,
     error: Option<SharedString>,
     _tasks: Vec<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl NotificationsView {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let mut this = Self { items: Vec::new(), next: None, synced_unread: None, count: 0, loading: false, error: None, _tasks: Vec::new() };
+        // Reload once back online if loading failed.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.refresh(cx);
+            }
+        });
+        let mut this =
+            Self { items: Vec::new(), next: None, synced_unread: None, count: 0, loading: false, error: None, _tasks: Vec::new(), _reconnect: reconnect };
         this.refresh(cx);
         // Opening the page clears the badge.
         api(

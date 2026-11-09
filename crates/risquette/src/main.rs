@@ -8,6 +8,7 @@ mod admin;
 mod bus;
 mod communities;
 mod community;
+mod connection;
 mod crash;
 mod desktop;
 mod embed;
@@ -120,6 +121,8 @@ fn main() {
         cx.set_global(state::AppState { client: Arc::new(client) });
         cx.set_global(nav::StartupTarget(startup));
         bus::init(cx);
+        // Before the session's first request, so starting offline is noticed.
+        connection::init(cx);
         session::Session::init(cx);
         updater::Updater::init(cx);
         crash::schedule_test_crash(cx);

@@ -312,6 +312,9 @@ impl Render for Sidebar {
         let mut communities: Vec<Community> = session.communities().to_vec();
         communities.sort_by_key(|c| c.name.to_lowercase());
         let total = communities.len();
+        // Not loaded yet, or it couldn't load (offline): don't claim the list is empty.
+        let communities_loaded = session.initial().is_some();
+        let communities_failed = session.error.is_some();
         if !filter.is_empty() {
             communities.retain(|c| c.name.to_lowercase().contains(&filter));
         }
@@ -362,8 +365,15 @@ impl Render for Sidebar {
         }
         if open || self.rail {
             if communities.is_empty() && !self.rail {
-                let msg = if total == 0 { "You haven't joined any communities yet." } else { "No matches." };
-                scroll = scroll.child(div().px(px(12.)).py(px(6.)).text_size(t.fs.s).text_color(t.colors.text_light).child(msg));
+                let msg = match (total, communities_loaded, communities_failed) {
+                    (0, false, true) => Some("Communities appear here once Risquette can reach the server."),
+                    (0, false, false) => None,
+                    (0, true, _) => Some("You haven't joined any communities yet."),
+                    _ => Some("No matches."),
+                };
+                if let Some(msg) = msg {
+                    scroll = scroll.child(div().px(px(12.)).py(px(6.)).text_size(t.fs.s).text_color(t.colors.text_light).child(msg));
+                }
             }
             for (ix, c) in communities.iter().enumerate() {
                 scroll = scroll.child(self.community_row("sb-c", ix, c, false, cx));
