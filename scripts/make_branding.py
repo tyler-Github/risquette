@@ -133,7 +133,7 @@ def compose(size, theme_name, shot, s):
         y += int(38 * s)
     y += int(22 * s)
     x = left
-    for label in ["Rust", "GPUI", "Windows", "Open source"]:
+    for label in ["Rust", "GPUI", "Windows", "Linux", "Open source"]:
         x = pill(d, x, y, label, pill_f, theme, int(14 * s), int(7 * s)) + int(10 * s)
     return Image.alpha_composite(canvas, layer)
 

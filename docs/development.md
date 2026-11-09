@@ -57,10 +57,9 @@ Settings and saved logins live in `state.json` in `%APPDATA%\Risquette` (Windows
 
 ### Logs and crash reports
 
-`crates/risquette/src/crash.rs` handles both. Everything logged also goes to `%LOCALAPPDATA%\Risquette\logs
-isquette.log`, which is rotated at 2 MB with one old copy kept. If the app panics on any thread:
+`crates/risquette/src/crash.rs` handles both. Everything logged also goes to `risquette.log` in the logs folder (`%LOCALAPPDATA%\Risquette\logs` on Windows, `~/.local/share/Risquette/logs` on Linux), which is rotated at 2 MB with one old copy kept. If the app panics on any thread:
 
-1. A report goes to `%LOCALAPPDATA%\Risquette\crashes\crash-<time>.txt`, and only the newest 10 are kept. It contains the version, the Windows version, the panic message and its location, the last 100 log lines and a backtrace.
+1. A report goes to `crash-<time>.txt` in the crashes folder beside the logs folder, and only the newest 10 are kept. It contains the version, the operating system and its version, the panic message and its location, the last 100 log lines and a backtrace.
 2. The app starts a second copy of itself as `risquette --crash-report <file>` and exits, because a crashed app can't safely draw UI. That copy shows the crash window, which can open a pre-filled GitHub issue, restart the app, copy the details or show the file.
 
 With `RISQUETTE_CONFIG_DIR` set, logs and crash reports go there too. To try the flow, set `RISQUETTE_TEST_CRASH=1` and the app panics on purpose three seconds after starting. Release builds strip debug symbols, so backtraces show addresses only; the panic message and file location are always exact.
