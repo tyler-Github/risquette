@@ -1639,7 +1639,7 @@ dependencies = [
 
 [[package]]
 name = "discuit-api"
-version = "0.2.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5425,7 +5425,7 @@ dependencies = [
 
 [[package]]
 name = "risquette"
-version = "0.2.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -5451,7 +5451,7 @@ dependencies = [
 
 [[package]]
 name = "risquette-installer"
-version = "0.2.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "anyhow",
  "dirs 7.0.0",
@@ -5467,7 +5467,7 @@ dependencies = [
 
 [[package]]
 name = "risquette-theme"
-version = "0.2.0"
+version = "0.3.0-beta.1"
 dependencies = [
  "gpui",
 ]
