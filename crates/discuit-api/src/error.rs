@@ -43,6 +43,12 @@ impl Error {
         self.code() == Some("not_logged_in")
     }
 
+    /// The server couldn't be reached at all (no connection, the address
+    /// didn't resolve, or it timed out), as opposed to answering with an error.
+    pub fn is_network(&self) -> bool {
+        matches!(self, Error::Transport(ureq::Error::Io(_) | ureq::Error::Timeout(_) | ureq::Error::HostNotFound | ureq::Error::ConnectionFailed))
+    }
+
     /// A short message suitable for showing in the UI.
     pub fn user_message(&self) -> String {
         match self {
@@ -57,9 +63,28 @@ impl Error {
                 }
             }
             Error::RateLimited => "You're doing that too fast. Please wait a moment and try again.".into(),
+            Error::Transport(ureq::Error::Timeout(_)) => "The server took too long to answer. Check your internet connection and try again.".into(),
+            _ if self.is_network() => "Couldn't reach the server. Check your internet connection.".into(),
             Error::Transport(e) => format!("Network error: {e}"),
             Error::Decode(e) => format!("Unexpected response from the server: {e}"),
             Error::Url(e) => format!("Invalid address: {e}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn network_errors_are_recognised_and_explained() {
+        let offline = Error::Transport(ureq::Error::HostNotFound);
+        assert!(offline.is_network());
+        assert_eq!(offline.user_message(), "Couldn't reach the server. Check your internet connection.");
+        let io = Error::Transport(ureq::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionRefused)));
+        assert!(io.is_network());
+        // The server answering, even with an error, means it can be reached.
+        assert!(!Error::Status { status: 500, api: None }.is_network());
+        assert!(!Error::RateLimited.is_network());
     }
 }

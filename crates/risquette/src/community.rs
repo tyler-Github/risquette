@@ -22,11 +22,18 @@ pub struct CommunityView {
     feed: Option<Entity<FeedView>>,
     error: Option<SharedString>,
     _task: Option<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl CommunityView {
     pub fn new(name: String, cx: &mut Context<Self>) -> Self {
-        let mut this = Self { name, feed: None, error: None, _task: None };
+        // Reload once back online if loading failed.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.refresh(cx);
+            }
+        });
+        let mut this = Self { name, feed: None, error: None, _task: None, _reconnect: reconnect };
         this.refresh(cx);
         this
     }

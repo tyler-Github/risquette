@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- When Discuit can't be reached, Risquette shows a reconnecting screen that counts down to its next attempt, with **Try now** and a way into Settings if you need a different server. Once the connection is back it picks up where you left off: pages that failed to load, missing images and your account load without a restart. Nothing you send is repeated.
+
+### Changed
+
+- Connection problems now show a plain message such as "Couldn't reach the server" instead of a technical error, and an unreachable server is given up on after 10 seconds instead of a minute.
+
+### Fixed
+
+- Starting Risquette without an internet connection no longer leaves it looking logged out with no communities until the next restart.
+
 ## [0.3.0-beta.1] - 2026-11-09
 
 ### Added

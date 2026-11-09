@@ -24,6 +24,7 @@ pub struct CommunitiesView {
     generation: u64,
     _sub: Subscription,
     _tasks: Vec<Task<()>>,
+    _reconnect: Subscription,
 }
 
 impl CommunitiesView {
@@ -34,7 +35,14 @@ impl CommunitiesView {
                 this.reload(true, cx);
             }
         });
-        let mut this = Self { search, set: "all", items: None, error: None, busy: HashSet::new(), generation: 0, _sub: sub, _tasks: Vec::new() };
+        // Reload once back online if loading failed.
+        let reconnect = crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.reload(false, cx);
+            }
+        });
+        let mut this =
+            Self { search, set: "all", items: None, error: None, busy: HashSet::new(), generation: 0, _sub: sub, _tasks: Vec::new(), _reconnect: reconnect };
         this.reload(false, cx);
         this
     }

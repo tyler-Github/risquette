@@ -68,6 +68,12 @@ impl FeedView {
                 this.refresh(cx);
             }
         }));
+        // A page that failed to load (or to load more) tries again once back online.
+        subs.push(crate::connection::on_reconnect(cx, |this: &mut Self, cx| {
+            if this.error.is_some() {
+                this.retry(cx);
+            }
+        }));
 
         let mut this = Self {
             source,

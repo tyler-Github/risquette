@@ -54,6 +54,7 @@ pub fn switch_instance(base: String, cx: &mut App) {
     };
     let is_default = base == discuit_api::DEFAULT_BASE_URL;
     crate::storage::update(|s| s.instance = if is_default { None } else { Some(base.clone()) });
+    crate::connection::watch(&client);
     cx.set_global(AppState { client: Arc::new(client) });
     cx.set_global(ImageCache::default());
     crate::session::Session::entity(cx).update(cx, |s, cx| s.reload_for_instance(cx));
@@ -116,6 +117,11 @@ pub struct ImageCache {
 impl Global for ImageCache {}
 
 impl ImageCache {
+    /// Forget downloads that failed, so they're tried again (after reconnecting).
+    pub fn forget_failed(cx: &mut App) {
+        cx.default_global::<ImageCache>().slots.retain(|_, slot| !matches!(slot, Slot::Failed));
+    }
+
     /// The image if downloaded; otherwise starts a download (once) and re-renders when it lands.
     pub fn get(url: &str, cx: &mut App) -> Option<Arc<Image>> {
         let cache = cx.default_global::<ImageCache>();

@@ -19,7 +19,14 @@ pub use posts::{CommentAction, FeedQuery, NewPost, NewPostImage, PostAction};
 use crate::{Error, Result, error::ApiError};
 
 use serde::{Serialize, de::DeserializeOwned};
-use std::{collections::BTreeMap, sync::Mutex, time::Duration};
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicU8, Ordering},
+    },
+    time::Duration,
+};
 use url::Url;
 
 pub const DEFAULT_BASE_URL: &str = "https://discuit.org";
@@ -59,16 +66,52 @@ pub struct Client {
     agent: ureq::Agent,
     base: Url,
     cookies: Mutex<BTreeMap<String, String>>,
+    /// Told when the server goes from reachable to unreachable or back; see [`Client::on_reachability`].
+    reachability: Mutex<Option<ReachabilityHook>>,
+    /// The last reachability reported: [`UNKNOWN`], [`REACHABLE`] or [`UNREACHABLE`].
+    reachable: AtomicU8,
 }
+
+type ReachabilityHook = Arc<dyn Fn(bool) + Send + Sync>;
+
+const UNKNOWN: u8 = 0;
+const REACHABLE: u8 = 1;
+const UNREACHABLE: u8 = 2;
 
 impl Client {
     pub fn new(base_url: &str) -> Result<Self> {
         let config = ureq::Agent::config_builder()
             .http_status_as_error(false)
             .user_agent(concat!("Risquette/", env!("CARGO_PKG_VERSION")))
+            // Uploads can take a while, but an unreachable server should fail fast.
             .timeout_global(Some(Duration::from_secs(60)))
+            .timeout_resolve(Some(Duration::from_secs(10)))
+            .timeout_connect(Some(Duration::from_secs(10)))
             .build();
-        Ok(Self { agent: ureq::Agent::new_with_config(config), base: Url::parse(base_url)?, cookies: Mutex::new(BTreeMap::new()) })
+        Ok(Self {
+            agent: ureq::Agent::new_with_config(config),
+            base: Url::parse(base_url)?,
+            cookies: Mutex::new(BTreeMap::new()),
+            reachability: Mutex::new(None),
+            reachable: AtomicU8::new(UNKNOWN),
+        })
+    }
+
+    /// Call `hook` (on the request's thread) whenever the server becomes
+    /// unreachable (`false`: the connection failed) or reachable again (`true`:
+    /// it answered, even with an error). Only changes are reported, starting
+    /// with the first request.
+    pub fn on_reachability(&self, hook: impl Fn(bool) + Send + Sync + 'static) {
+        *self.reachability.lock().unwrap() = Some(Arc::new(hook));
+    }
+
+    fn report_reachable(&self, reachable: bool) {
+        let state = if reachable { REACHABLE } else { UNREACHABLE };
+        if self.reachable.swap(state, Ordering::SeqCst) != state
+            && let Some(hook) = self.reachability.lock().unwrap().clone()
+        {
+            hook(reachable);
+        }
     }
 
     pub fn base_url(&self) -> &Url {
@@ -165,6 +208,20 @@ impl Client {
     }
 
     fn send_raw(&self, method: Method, url: Url, body: Body) -> Result<Vec<u8>> {
+        let same_origin = url.origin() == self.base.origin();
+        let result = self.send_inner(method, url, body);
+        // Only requests to the instance itself say whether it can be reached.
+        if same_origin {
+            match &result {
+                Err(e) if e.is_network() => self.report_reachable(false),
+                Ok(_) | Err(Error::Status { .. } | Error::RateLimited) => self.report_reachable(true),
+                Err(_) => {}
+            }
+        }
+        result
+    }
+
+    fn send_inner(&self, method: Method, url: Url, body: Body) -> Result<Vec<u8>> {
         // Only send our cookies to our own origin.
         let same_origin = url.origin() == self.base.origin();
         let (cookie_header, csrf) = if same_origin {
@@ -365,6 +422,41 @@ pub(crate) mod test_server {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn recording(c: &Client) -> Arc<Mutex<Vec<bool>>> {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let s = seen.clone();
+        c.on_reachability(move |reachable| s.lock().unwrap().push(reachable));
+        seen
+    }
+
+    #[test]
+    fn only_reachability_changes_are_reported() {
+        let c = Client::new(DEFAULT_BASE_URL).unwrap();
+        let seen = recording(&c);
+        for reachable in [true, true, false, false, false, true] {
+            c.report_reachable(reachable);
+        }
+        assert_eq!(*seen.lock().unwrap(), [true, false, true]);
+    }
+
+    #[test]
+    fn a_refused_connection_means_unreachable() {
+        // A port that was just free, so nothing answers on it.
+        let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let c = Client::new(&format!("http://127.0.0.1:{port}")).unwrap();
+        let seen = recording(&c);
+        let err = c.fetch_bytes("/").unwrap_err();
+        assert!(err.is_network(), "{err:?}");
+        assert_eq!(err.user_message(), "Couldn't reach the server. Check your internet connection.");
+        assert_eq!(*seen.lock().unwrap(), [false]);
+        // A server that answers, even with an error, counts as reachable.
+        let (base, _rx) = test_server::serve(500, "{}", None);
+        let c = Client::new(&base).unwrap();
+        let seen = recording(&c);
+        assert!(!c.fetch_bytes("/").unwrap_err().is_network());
+        assert_eq!(*seen.lock().unwrap(), [true]);
+    }
 
     #[test]
     fn cookie_roundtrip_and_urls() {

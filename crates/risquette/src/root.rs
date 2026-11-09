@@ -25,8 +25,8 @@ use crate::{
 };
 use discuit_api::FeedType;
 use gpui::{
-    AnyView, App, Context, Entity, FocusHandle, Focusable, FontWeight, Pixels, Point, SharedString, Subscription, Task, Window, anchored, deferred, div,
-    prelude::*, px,
+    AnimationExt, AnyView, App, Context, Entity, FocusHandle, Focusable, FontWeight, Pixels, Point, SharedString, Subscription, Task, Window, anchored,
+    deferred, div, prelude::*, px,
 };
 use risquette_theme::{ActiveTheme, Mode, Theme};
 use std::{rc::Rc, time::Duration};
@@ -87,6 +87,8 @@ impl Root {
         let updater = crate::updater::Updater::entity(cx);
         subs.push(cx.observe(&updater, |_, _, cx| cx.notify()));
         subs.push(cx.subscribe(&updater, |_, _, _: &crate::updater::UpdaterEvent, cx| crate::updater::open_dialog(cx)));
+        // Show or hide the offline banner.
+        subs.push(cx.observe(&crate::connection::entity(cx), |_, _, cx| cx.notify()));
         let sidebar = cx.new(Sidebar::new);
         let quick_jump = cx.new(QuickJump::new);
         let mut this = Self {
@@ -465,6 +467,156 @@ impl Root {
             )
     }
 
+    /// While the server can't be reached: a card over the dimmed window, with a
+    /// countdown to the next attempt, "Try now", and a way into Settings in case
+    /// the server address itself is the problem.
+    fn render_reconnecting(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        let connection = crate::connection::entity(cx);
+        let (show, checking, next) = {
+            let c = connection.read(cx);
+            (c.show_screen(), c.is_checking(), c.seconds_to_next_check())
+        };
+        if !show {
+            return None;
+        }
+        let t = *cx.theme();
+        let host = AppState::client(cx).base_url().host_str().unwrap_or("the server").to_string();
+        let status: SharedString = match (checking, next) {
+            (true, _) | (false, None) => "Reconnecting…".into(),
+            (false, Some(1)) => "Trying again in 1 second".into(),
+            (false, Some(n)) => format!("Trying again in {n} seconds").into(),
+        };
+        let pulse = || gpui::Animation::new(Duration::from_millis(1800)).repeat().with_easing(gpui::pulsating_between(0.15, 0.9));
+        let retry = connection.clone();
+
+        // The logo inside a softly pulsing ring.
+        let mark = div()
+            .relative()
+            .size(px(96.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(div().absolute().inset_0().rounded_full().border_2().border_color(t.colors.brand).with_animation(
+                "reconnect-ring",
+                pulse(),
+                |ring, delta| ring.opacity(delta),
+            ))
+            .child(gpui::img(logo()).size(px(64.)));
+
+        // "Trying again in 3 seconds", after a pulsing dot.
+        let status_pill = div()
+            .flex()
+            .items_center()
+            .gap(px(8.))
+            .px(px(12.))
+            .py(px(5.))
+            .rounded_full()
+            .bg(t.colors.input)
+            .text_size(t.fs.s)
+            .text_color(t.colors.text_light)
+            .child(div().size(px(8.)).rounded_full().bg(t.colors.brand).with_animation("reconnect-dot", pulse(), |dot, delta| dot.opacity(delta)))
+            .child(status);
+
+        let card = div()
+            .w(px(360.))
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(14.))
+            .px(px(28.))
+            .pt(px(30.))
+            .pb(px(24.))
+            .rounded(px(16.))
+            .bg(t.colors.card)
+            .border_1()
+            .border_color(t.colors.card_ring)
+            .shadow_lg()
+            .child(mark)
+            .child(div().mt(px(4.)).text_size(t.fs.l).font_weight(FontWeight::BOLD).text_center().child(format!("Can't reach {host}")))
+            .child(
+                div()
+                    .text_size(t.fs.s)
+                    .text_color(t.colors.text_light)
+                    .text_center()
+                    .child("Check your internet connection. Risquette will pick up where you left off once it's back."),
+            )
+            .child(status_pill)
+            .child(
+                div()
+                    .mt(px(6.))
+                    .w(px(304.))
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .child(
+                        ui::button_main("reconnect-now", if checking { "Trying…" } else { "Try now" }, cx)
+                            .justify_center()
+                            .on_click(move |_, _, cx| retry.update(cx, |c, cx| c.check_now(cx))),
+                    )
+                    .child(
+                        ui::button_clear("reconnect-settings", cx)
+                            .justify_center()
+                            .text_size(t.fs.s)
+                            .text_color(t.colors.text_light)
+                            .child("Use a different server")
+                            .on_click(move |_, _, cx| {
+                                connection.update(cx, |c, cx| c.dismiss(cx));
+                                nav::go(Target::Settings, cx);
+                            }),
+                    ),
+            );
+
+        Some(
+            div()
+                .id("reconnecting")
+                .absolute()
+                .inset_0()
+                // Dim the app, and keep clicks and scrolling from reaching it.
+                .bg(t.colors.body.opacity(0.94))
+                .occlude()
+                .flex()
+                .items_center()
+                .justify_center()
+                .p(px(24.))
+                .child(card),
+        )
+    }
+
+    /// Offline with the reconnecting screen set aside: a strip under the toolbar, with "Try again".
+    fn render_offline_banner(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+        let connection = crate::connection::entity(cx);
+        let (show, checking) = {
+            let c = connection.read(cx);
+            (c.show_banner(), c.is_checking())
+        };
+        if !show {
+            return None;
+        }
+        let t = cx.theme();
+        let base = AppState::client(cx).base_url().host_str().unwrap_or("the server").to_string();
+        Some(
+            div()
+                .id("offline-banner")
+                .flex_none()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(16.))
+                .py(px(8.))
+                .bg(t.colors.card)
+                .border_b_1()
+                .border_color(t.colors.separator)
+                .text_size(t.fs.s)
+                .child(icons::icon(Icon::WifiOff, t.colors.red))
+                .child(div().flex_1().min_w_0().child(format!("Can't reach {base}. Check your internet connection; Risquette will reconnect by itself.")))
+                .child(
+                    ui::button("offline-retry", if checking { "Checking…" } else { "Try again" }, cx)
+                        .flex_none()
+                        .on_click(move |_, _, cx| connection.update(cx, |c, cx| c.check_now(cx))),
+                ),
+        )
+    }
+
     fn render_overlays(&self, window: &mut Window, cx: &mut Context<Self>) -> Vec<gpui::AnyElement> {
         let t = *cx.theme();
         let mut out = Vec::new();
@@ -616,7 +768,24 @@ impl Render for Root {
             .font_family(t.font_family)
             .text_size(t.fs.normal)
             .child(self.sidebar.clone())
-            .child(div().flex_1().min_w_0().h_full().flex().flex_col().child(self.render_navbar(cx)).child(div().flex_1().min_h_0().children(body)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .flex()
+                    .flex_col()
+                    .child(self.render_navbar(cx))
+                    .children(self.render_offline_banner(cx))
+                    .child(div().flex_1().min_h_0().children(body)),
+            )
             .children(overlays)
+            .children(self.render_reconnecting(cx))
     }
+}
+
+/// The app's logo, for the reconnecting screen.
+fn logo() -> std::sync::Arc<gpui::Image> {
+    static LOGO: std::sync::OnceLock<std::sync::Arc<gpui::Image>> = std::sync::OnceLock::new();
+    LOGO.get_or_init(|| std::sync::Arc::new(gpui::Image::from_bytes(gpui::ImageFormat::Png, include_bytes!("../../../branding/logo-128.png").to_vec()))).clone()
 }
