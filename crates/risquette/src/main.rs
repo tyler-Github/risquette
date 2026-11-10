@@ -10,6 +10,7 @@ mod communities;
 mod community;
 mod connection;
 mod crash;
+mod custom_feed;
 mod desktop;
 mod drafts;
 mod embed;
@@ -24,6 +25,7 @@ mod modtools;
 mod nav;
 mod new_post;
 mod notifications;
+mod personal;
 mod player;
 mod post;
 mod post_card;
@@ -110,15 +112,10 @@ fn main() {
     let startup = if play.is_some() { None } else { args.first().and_then(|arg| startup_target(arg, &client)) };
 
     Application::new().with_assets(icons::Assets).run(move |cx: &mut App| {
-        let mode = match storage::load().theme.as_deref() {
-            Some("dark") => Mode::Dark,
-            Some("light") => Mode::Light,
-            _ => match cx.window_appearance() {
-                WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
-                _ => Mode::Light,
-            },
-        };
-        cx.set_global(Theme::new(mode));
+        let system_dark = matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark);
+        let stored = storage::load();
+        let mode = Mode::from_setting(stored.theme.as_deref(), system_dark);
+        cx.set_global(Theme::with_contrast(mode, stored.high_contrast));
         cx.set_global(state::AppState { client: Arc::new(client) });
         cx.set_global(nav::StartupTarget(startup));
         bus::init(cx);

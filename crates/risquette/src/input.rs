@@ -986,7 +986,7 @@ impl Render for TextInput {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let t = *cx.theme();
         let focused = self.focus_handle.is_focused(window);
-        let border = if focused { t.colors.input_border_focus } else { gpui::transparent_black() };
+        let border = if focused { t.colors.input_border_focus } else { t.colors.input_border };
         let hover_border = if focused { t.colors.input_border_focus } else { t.colors.input_border_hover };
         let line_height = if self.multiline { px(21.) } else { px(20.) };
         div()

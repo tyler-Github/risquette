@@ -27,6 +27,8 @@ pub struct SettingsView {
     instance_status: Option<(bool, SharedString)>,
     probing: bool,
     update_server: Entity<TextInput>,
+    /// Settings → Reading: a word or phrase to add to the keyword filters.
+    keyword: Entity<TextInput>,
     _tasks: Vec<Task<()>>,
     _subs: Vec<gpui::Subscription>,
 }
@@ -43,7 +45,17 @@ impl SettingsView {
         let update_server =
             cx.new(|cx| TextInput::new(cx).placeholder(crate::updater::DEFAULT_SERVER).with_text(stored.update_server.clone().unwrap_or_default()));
         let updater = crate::updater::Updater::entity(cx);
-        let subs = vec![cx.observe(&updater, |_, _, cx| cx.notify()), cx.observe(&Session::entity(cx), |_, _, cx| cx.notify())];
+        let keyword = cx.new(|cx| TextInput::new(cx).icon(Icon::Funnel).placeholder("Add a word or phrase").max_len(100));
+        let subs = vec![
+            cx.observe(&updater, |_, _, cx| cx.notify()),
+            cx.observe(&Session::entity(cx), |_, _, cx| cx.notify()),
+            // Enter adds the keyword.
+            cx.subscribe(&keyword, |this: &mut Self, _, ev: &crate::input::InputEvent, cx| {
+                if *ev == crate::input::InputEvent::Submit {
+                    this.add_keyword(cx);
+                }
+            }),
+        ];
         let user = Session::get(cx).user().cloned().unwrap_or_default();
         let profile = ProfileUpdate::from_user(&user);
         let about = cx.new(|cx| {
@@ -63,6 +75,7 @@ impl SettingsView {
             instance_status: None,
             probing: false,
             update_server,
+            keyword,
             _tasks: Vec::new(),
             _subs: subs,
         };
@@ -321,14 +334,8 @@ impl SettingsView {
         let set_theme = |choice: Option<&'static str>| {
             move |_: &gpui::ClickEvent, window: &mut Window, cx: &mut gpui::App| {
                 crate::storage::update(|s| s.theme = choice.map(str::to_string));
-                let mode = match choice {
-                    Some("dark") => Mode::Dark,
-                    Some("light") => Mode::Light,
-                    _ => match window.appearance() {
-                        gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark => Mode::Dark,
-                        _ => Mode::Light,
-                    },
-                };
+                let system_dark = matches!(window.appearance(), gpui::WindowAppearance::Dark | gpui::WindowAppearance::VibrantDark);
+                let mode = Mode::from_setting(choice, system_dark);
                 Theme::set_mode(mode, cx);
                 cx.refresh_windows();
             }
@@ -348,7 +355,21 @@ impl SettingsView {
                 cx.notify();
             })));
         let app_card = section("App", cx)
-            .child(setting("Theme", "Follow your system, or always use light or dark (Ctrl+Shift+L toggles).", theme, cx))
+            .child(setting("Theme", "Follow your system, or always use light or dark (Ctrl+Shift+L switches between them).", theme, cx))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .child(ui::checkbox("s-high-contrast", stored.high_contrast, "High contrast", cx).on_click(cx.listener(|_, _, _, cx| {
+                        let on = !crate::storage::load().high_contrast;
+                        crate::storage::update(|s| s.high_contrast = on);
+                        Theme::set_high_contrast(on, cx);
+                    })))
+                    .child(div().pl(px(24.)).text_size(t.fs.s).text_color(t.colors.text_light).child(
+                        "Black and white with strong borders and bold accents, in light or dark. Text meets the strictest accessibility guideline (WCAG AAA).",
+                    )),
+            )
             .child(setting("Open on launch", "Which feed Risquette shows when it starts.", startup, cx))
             // Only Windows has the built-in player; elsewhere videos always open in the browser.
             .when(cfg!(windows), |d| {
@@ -517,6 +538,111 @@ fn segmented(cx: &gpui::App) -> gpui::Div {
 fn card_text(text: impl Into<SharedString>, cx: &gpui::App) -> gpui::Div {
     let t = cx.theme();
     div().text_size(t.fs.s).text_color(t.colors.text_light).child(text.into())
+}
+
+impl SettingsView {
+    fn add_keyword(&mut self, cx: &mut Context<Self>) {
+        let text = self.keyword.read(cx).text().to_string();
+        if crate::personal::add_keyword(&text, cx) {
+            self.keyword.update(cx, |i, cx| i.clear(cx));
+        }
+        cx.notify();
+    }
+
+    /// Reading: how feeds and threads look, and what they hide.
+    fn reading_section(&self, cx: &mut Context<Self>) -> gpui::Div {
+        let t = *cx.theme();
+        let stored = crate::storage::load();
+        let toggle = |id: &'static str, on: bool, label: &'static str, hint: &'static str, flip: fn(&mut crate::storage::Stored), cx: &mut Context<Self>| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(ui::checkbox(id, on, label, cx).on_click(cx.listener(move |_, _, _, cx| {
+                    crate::storage::update(flip);
+                    cx.refresh_windows();
+                })))
+                .child(div().pl(px(24.)).text_size(t.fs.s).text_color(t.colors.text_light).child(hint))
+        };
+        let keywords = stored.keyword_filters.clone();
+        let chips = keywords
+            .iter()
+            .enumerate()
+            .map(|(ix, k)| {
+                let keyword = k.clone();
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .pl(px(10.))
+                    .pr(px(4.))
+                    .py(px(3.))
+                    .rounded_full()
+                    .bg(t.colors.input)
+                    .text_size(t.fs.s)
+                    .child(k.clone())
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("s-kw-rm-{ix}")))
+                            .p(px(3.))
+                            .rounded_full()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(t.colors.button_hover))
+                            .tooltip(ui::tooltip("Stop filtering this"))
+                            .child(crate::icons::sized(Icon::X, px(12.), t.colors.text_light))
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                crate::personal::remove_keyword(&keyword, cx);
+                                cx.notify();
+                            })),
+                    )
+            })
+            .collect::<Vec<_>>();
+        section("Reading", cx)
+            .child(toggle(
+                "s-carousel-below",
+                stored.carousel_controls_below,
+                "Image gallery controls under the picture",
+                "Puts the arrows, dots and counter of posts with several images below the image, so nothing covers it.",
+                |s| s.carousel_controls_below = !s.carousel_controls_below,
+                cx,
+            ))
+            .child(toggle(
+                "s-thread-colours",
+                stored.colored_thread_lines,
+                "Colour-code reply lines by depth",
+                "Each level of replies gets its own colour, so long threads are easier to follow.",
+                |s| s.colored_thread_lines = !s.colored_thread_lines,
+                cx,
+            ))
+            .child(toggle(
+                "s-sort-per-feed",
+                stored.sort_per_feed,
+                "Remember the sort for each feed",
+                "Home, All and each community keep their own sort, instead of one sort for every feed.",
+                |s| s.sort_per_feed = !s.sort_per_feed,
+                cx,
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .pt(px(4.))
+                    .child(div().font_weight(gpui::FontWeight::SEMIBOLD).child("Keyword filters"))
+                    .child(card_text(
+                        "Posts whose title or text contains one of these words or phrases are hidden from feeds (not from profiles or saved lists). Whole words only, any case: \"art\" hides \"Modern Art\" but not \"start\".",
+                        cx,
+                    ))
+                    .child(
+                        div()
+                            .flex()
+                            .gap(px(8.))
+                            .child(div().flex_1().min_w_0().flex().flex_col().child(self.keyword.clone()))
+                            .child(ui::button("s-kw-add", "Add", cx).on_click(cx.listener(|this, _, _, cx| this.add_keyword(cx)))),
+                    )
+                    .when(!chips.is_empty(), |d| d.child(div().flex().flex_wrap().gap(px(6.)).children(chips))),
+            )
+    }
 }
 
 fn setting(title: &'static str, hint: impl Into<SharedString>, control: impl IntoElement, cx: &gpui::App) -> gpui::Div {
@@ -758,13 +884,25 @@ impl Render for SettingsView {
             );
 
         let (instance_card, app_card, updates_card) = self.app_sections(window, cx);
+        let reading_card = self.reading_section(cx);
         let help_card = help_section(cx);
         let logged_in = Session::get(cx).user().is_some();
         let two_cols = f32::from(window.viewport_size().width) > 1250.;
         let (left, right) = if logged_in {
             (
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(danger).child(profile).child(prefs).child(password),
-                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(instance_card).child(updates_card).child(help_card).child(mutes),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(app_card)
+                    .child(reading_card)
+                    .child(instance_card)
+                    .child(updates_card)
+                    .child(help_card)
+                    .child(mutes),
             )
         } else {
             let signin = section("Account", cx).child(card_text("Log in to edit your profile, notification preferences, password and mutes.", cx)).child(
@@ -775,7 +913,7 @@ impl Render for SettingsView {
                     .child(ui::button("s-signup", "Create account", cx).on_click(|_, _, cx| crate::modals::open_signup(cx))),
             );
             (
-                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(signin).child(help_card),
+                div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(app_card).child(reading_card).child(signin).child(help_card),
                 div().flex_1().min_w_0().flex().flex_col().gap(px(12.)).child(instance_card).child(updates_card),
             )
         };

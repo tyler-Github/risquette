@@ -318,6 +318,8 @@ pub fn carousel(key: &str, post_id: &str, images: &[(discuit_api::Image, Option<
     let url = image.best_url(COLUMN_WIDTH as u32).to_string();
     let ph = ui::placeholder_color(image, cx);
     let full = crate::state::AppState::client(cx).absolute_url(&image.url).map(|u| u.to_string()).unwrap_or_default();
+    // Settings → Reading: keep the picture clear by putting the controls under it.
+    let below = crate::storage::load().carousel_controls_below;
 
     let arrow = |dir: i32| {
         let target = if dir < 0 { (ix + n - 1) % n } else { (ix + 1) % n };
@@ -353,7 +355,51 @@ pub fn carousel(key: &str, post_id: &str, images: &[(discuit_api::Image, Option<
         .bg(t.colors.skeleton)
         .child(ui::remote_image(&url, ObjectFit::Contain, t.metrics.radius, ph, cx))
         .when(open_on_click, |d| d.cursor_pointer().on_click(move |_, _, cx| cx.open_url(&full)));
-    if n > 1 {
+    let mut controls = None;
+    if n > 1 && below {
+        let step = |dir: i32| {
+            let target = if dir < 0 { (ix + n - 1) % n } else { (ix + 1) % n };
+            let id = post_id.to_string();
+            div()
+                .id(SharedString::from(format!("{key}-{}", if dir < 0 { "prev" } else { "next" })))
+                .size(px(28.))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(t.colors.button)
+                .hover(|s| s.bg(t.colors.button_hover))
+                .cursor_pointer()
+                .child(icons::sized(if dir < 0 { Icon::ChevronLeft } else { Icon::ChevronRight }, px(16.), t.colors.button_text))
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    set_slide(&id, target, cx);
+                })
+        };
+        controls = Some(
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .gap(px(10.))
+                .child(step(-1))
+                .child(div().flex().items_center().gap(px(6.)).children((0..n).map(|i| {
+                    let id = post_id.to_string();
+                    div()
+                        .id(SharedString::from(format!("{key}-dot-{i}")))
+                        .size(px(7.))
+                        .rounded_full()
+                        .cursor_pointer()
+                        .bg(if i == ix { t.colors.brand } else { t.colors.text_light.opacity(0.35) })
+                        .on_click(move |_, _, cx| {
+                            cx.stop_propagation();
+                            set_slide(&id, i, cx);
+                        })
+                })))
+                .child(div().min_w(px(36.)).text_size(t.fs.xs).text_color(t.colors.text_light).child(format!("{} / {n}", ix + 1)))
+                .child(step(1)),
+        );
+    } else if n > 1 {
         let prev = arrow(-1);
         let next = arrow(1);
         frame = frame
@@ -394,6 +440,7 @@ pub fn carousel(key: &str, post_id: &str, images: &[(discuit_api::Image, Option<
         .flex_col()
         .gap(px(6.))
         .child(frame)
+        .children(controls)
         .when_some(caption.clone().or(image.alt_text.clone()).filter(|c| !c.trim().is_empty()), |d, c| {
             d.child(div().text_size(t.fs.s).text_color(t.colors.text_light).child(c))
         })

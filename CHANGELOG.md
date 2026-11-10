@@ -8,6 +8,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Custom feeds: combine several communities into one feed, newest first. Make one from **New custom feed** in the sidebar or a community's menu, and add or remove communities from the feed's page.
+- Favourite communities: star a community to keep it at the top of the sidebar, and drag favourites into your own order.
+- Keyword filters in Settings → Reading: hide posts whose title or text contains certain words or phrases.
+- High contrast for both the light and dark themes, in Settings → App.
+- Reading options in Settings → Reading: put a gallery's arrows, dots and counter under the picture instead of on it, colour-code reply lines by depth, and remember the sort for each feed separately. All three are off unless you turn them on.
+
+### Added
+
 - Drafts: unsent comments, replies and posts are kept as you type and come back when you return, even after closing Risquette, with a **Discard** link if you don't want them. They're removed once sent.
 - While you're reading a feed, Risquette checks for new posts once a minute and shows a "new posts" button at the top. Click it to see them; the feed doesn't move under you otherwise.
 

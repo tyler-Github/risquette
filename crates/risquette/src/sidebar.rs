@@ -1,17 +1,21 @@
-//! The left sidebar: primary navigation, moderated and joined communities
-//! (with a filter), and the account card. Collapses to an icon rail.
+//! The left sidebar: primary navigation, favourite communities (dragged into
+//! order), custom feeds, moderated and joined communities (with a filter), and
+//! the account card. Collapses to an icon rail. Right-clicking a community
+//! offers favourites and custom feeds.
 
 use crate::{
-    communities,
+    communities, custom_feed,
     icons::{self, Icon},
     input::{InputEvent, TextInput},
     modals,
-    nav::{self, Target},
+    nav::{self, MenuItem, Target},
+    personal,
     session::{Session, SessionEvent},
-    storage, ui,
+    storage::{self, FeedCommunity},
+    ui,
 };
 use discuit_api::Community;
-use gpui::{AnyElement, App, Context, ElementId, Entity, FontWeight, Hsla, SharedString, Subscription, Window, div, prelude::*, px};
+use gpui::{AnyElement, App, Context, ElementId, Entity, FontWeight, Hsla, MouseButton, SharedString, Subscription, Window, div, prelude::*, px};
 use risquette_theme::ActiveTheme;
 
 pub const EXPANDED_WIDTH: f32 = 252.;
@@ -24,9 +28,58 @@ pub struct Sidebar {
     rail: bool,
     filter: Entity<TextInput>,
     show_filter: bool,
+    show_favourites: bool,
+    show_custom_feeds: bool,
     show_moderating: bool,
     show_communities: bool,
     _subs: Vec<Subscription>,
+}
+
+/// A favourite being dragged to a new place in the list.
+#[derive(Clone)]
+struct DraggedFavourite {
+    ix: usize,
+    name: SharedString,
+}
+
+impl Render for DraggedFavourite {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = cx.theme();
+        div()
+            .px(px(12.))
+            .py(px(6.))
+            .rounded(px(7.))
+            .bg(t.colors.card)
+            .border_1()
+            .border_color(t.colors.brand)
+            .shadow_lg()
+            .text_size(t.fs.normal)
+            .text_color(t.colors.text)
+            .child(self.name.clone())
+    }
+}
+
+/// The right-click menu for a community: favourites, their order, and custom feeds.
+fn community_menu(name: &str, id: Option<&str>, cx: &App) -> Vec<MenuItem> {
+    let favourites = personal::favourites(cx);
+    let fav_ix = favourites.iter().position(|f| f.eq_ignore_ascii_case(name));
+    let toggle_name = name.to_string();
+    let mut items = vec![
+        MenuItem::new(if fav_ix.is_some() { "Remove from favourites" } else { "Add to favourites" }, move |_, cx| personal::toggle_favourite(&toggle_name, cx))
+            .icon(Icon::Star),
+    ];
+    if let Some(ix) = fav_ix {
+        if ix > 0 {
+            items.push(MenuItem::new("Move up", move |_, cx| personal::move_favourite(ix, ix - 1, cx)).icon(Icon::ChevronUp));
+        }
+        if ix + 1 < favourites.len() {
+            items.push(MenuItem::new("Move down", move |_, cx| personal::move_favourite(ix, ix + 1, cx)).icon(Icon::ChevronDown));
+        }
+    }
+    if let Some(id) = id {
+        items.extend(custom_feed::menu_items(FeedCommunity { id: id.to_string(), name: name.to_string() }, cx));
+    }
+    items
 }
 
 impl Sidebar {
@@ -42,7 +95,18 @@ impl Sidebar {
             }),
         ];
         let collapsed = storage::load().sidebar_collapsed;
-        Self { current: None, collapsed, rail: collapsed, filter, show_filter: false, show_moderating: true, show_communities: true, _subs: subs }
+        Self {
+            current: None,
+            collapsed,
+            rail: collapsed,
+            filter,
+            show_filter: false,
+            show_favourites: true,
+            show_custom_feeds: true,
+            show_moderating: true,
+            show_communities: true,
+            _subs: subs,
+        }
     }
 
     pub fn set_current(&mut self, target: Option<Target>, cx: &mut Context<Self>) {
@@ -150,7 +214,59 @@ impl Sidebar {
                     }),
             );
         }
-        row.on_click(move |_, _, cx| nav::go(target.clone(), cx)).into_any_element()
+        let (name, id) = (c.name.clone(), c.id.clone());
+        row.on_click(move |_, _, cx| nav::go(target.clone(), cx))
+            .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
+                cx.stop_propagation();
+                let items = community_menu(&name, Some(&id), cx);
+                nav::open_menu(ev.position, items, cx);
+            })
+            .into_any_element()
+    }
+
+    /// A favourite: like a community row, and dragged to reorder.
+    fn favourite_row(&self, ix: usize, name: &str, known: Option<&Community>, cx: &mut Context<Self>) -> AnyElement {
+        let target = Target::Community(name.to_string());
+        let active = self.is_active(&target);
+        let pic = known.and_then(|c| c.pro_pic.as_ref()).map(|i| i.best_url(40).to_string());
+        let avatar = ui::avatar(pic.as_deref(), name, px(22.), cx);
+        let brand = cx.theme().colors.brand;
+        let (menu_name, id) = (name.to_string(), known.map(|c| c.id.clone()));
+        let group: SharedString = format!("sb-fav-{ix}").into();
+        let grip = cx.theme().colors.text_light;
+        self.row(group.clone(), avatar, name.to_string().into(), active, None, cx)
+            .group(group.clone())
+            // A grip that shows on hover, as a hint that favourites can be dragged.
+            .when(!self.rail, |d| d.child(div().opacity(0.).group_hover(group, |s| s.opacity(1.)).child(icons::sized(Icon::GripVertical, px(14.), grip))))
+            .on_click(move |_, _, cx| nav::go(target.clone(), cx))
+            .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
+                cx.stop_propagation();
+                let items = community_menu(&menu_name, id.as_deref(), cx);
+                nav::open_menu(ev.position, items, cx);
+            })
+            .on_drag(DraggedFavourite { ix, name: name.to_string().into() }, |d, _, _, cx| cx.new(|_| d.clone()))
+            .drag_over::<DraggedFavourite>(move |s, _, _, _| s.bg(brand.opacity(0.15)))
+            .on_drop(move |d: &DraggedFavourite, _, cx| personal::move_favourite(d.ix, ix, cx))
+            .into_any_element()
+    }
+
+    /// A custom feed: opens it; right-click to rename or delete.
+    fn custom_feed_row(&self, feed: &storage::CustomFeed, cx: &mut Context<Self>) -> AnyElement {
+        let target = Target::CustomFeed(feed.id);
+        let active = self.is_active(&target);
+        let id = feed.id;
+        let icon = icons::sized(Icon::Layers, px(18.), if active { cx.theme().colors.brand } else { cx.theme().colors.text_light });
+        self.row(SharedString::from(format!("sb-cf-{id}")), icon, feed.name.clone().into(), active, None, cx)
+            .on_click(move |_, _, cx| nav::go(target.clone(), cx))
+            .on_mouse_down(MouseButton::Right, move |ev, _, cx| {
+                cx.stop_propagation();
+                let items = vec![
+                    MenuItem::new("Rename…", move |_, cx| custom_feed::open_rename(id, cx)).icon(Icon::Pencil),
+                    MenuItem::new("Delete…", move |_, cx| custom_feed::confirm_delete(id, cx)).icon(Icon::Trash).danger(),
+                ];
+                nav::open_menu(ev.position, items, cx);
+            })
+            .into_any_element()
     }
 
     fn section_header(&self, id: &'static str, label: &'static str, open: bool, count: usize, toggle: fn(&mut Self), cx: &mut Context<Self>) -> AnyElement {
@@ -309,6 +425,8 @@ impl Render for Sidebar {
         let username = session.username().map(str::to_string);
         let moderating: Vec<Community> = session.user().and_then(|u| u.modding_list.clone()).unwrap_or_default();
         let filter = self.filter.read(cx).text().trim().to_lowercase();
+        // Every community we have details for, to show favourites with their pictures.
+        let known: Vec<Community> = session.communities().iter().chain(moderating.iter()).cloned().collect();
         let mut communities: Vec<Community> = session.communities().to_vec();
         communities.sort_by_key(|c| c.name.to_lowercase());
         let total = communities.len();
@@ -340,6 +458,39 @@ impl Render for Sidebar {
         }
 
         let mut scroll = div().id("sb-scroll").flex_1().min_h_0().overflow_y_scroll().px(px(10.)).py(px(10.)).flex().flex_col().child(primary);
+
+        // Favourites, in the user's order (dragged, or "Move up/down" on right-click).
+        let favourites = personal::favourites(cx);
+        if !favourites.is_empty() {
+            let open = self.show_favourites;
+            scroll = scroll.child(self.section_header("sb-h-fav", "FAVOURITES", open, favourites.len(), |s| s.show_favourites = !s.show_favourites, cx));
+            if open || self.rail {
+                for (ix, name) in favourites.iter().enumerate() {
+                    let c = known.iter().find(|c| c.name.eq_ignore_ascii_case(name)).cloned();
+                    scroll = scroll.child(self.favourite_row(ix, name, c.as_ref(), cx));
+                }
+            }
+        }
+
+        // Custom feeds, with a way to make one.
+        let feeds = personal::custom_feeds(cx);
+        let open = self.show_custom_feeds;
+        if !feeds.is_empty() || !self.rail {
+            scroll = scroll.child(self.section_header("sb-h-cf", "CUSTOM FEEDS", open, feeds.len(), |s| s.show_custom_feeds = !s.show_custom_feeds, cx));
+        }
+        if open || self.rail {
+            for feed in &feeds {
+                scroll = scroll.child(self.custom_feed_row(feed, cx));
+            }
+            if !self.rail {
+                let muted: Hsla = t.colors.text_light;
+                scroll = scroll.child(
+                    self.row("sb-cf-new", icons::sized(Icon::Plus, px(18.), muted), "New custom feed".into(), false, None, cx)
+                        .text_color(muted)
+                        .on_click(|_, _, cx| custom_feed::open_new_feed(None, cx)),
+                );
+            }
+        }
 
         if !moderating.is_empty() {
             let open = self.show_moderating;

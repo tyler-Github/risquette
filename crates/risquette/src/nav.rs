@@ -9,17 +9,26 @@ use std::rc::Rc;
 pub enum Target {
     Home,
     All,
-    Post { public_id: String },
+    Post {
+        public_id: String,
+    },
     Community(String),
     User(String),
-    NewPost { community: Option<String> },
+    NewPost {
+        community: Option<String>,
+    },
     Notifications,
     Settings,
     Lists(String),
-    List { id: i64, title: String },
+    List {
+        id: i64,
+        title: String,
+    },
     Communities,
     ModTools(String),
     Admin,
+    /// A custom feed, by id (see [`crate::personal`]).
+    CustomFeed(u64),
 }
 
 /// A page to open once the session has loaded (from the command line).
