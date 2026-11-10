@@ -42,7 +42,7 @@
 Download Risquette from the [latest release](https://github.com/tyler-Github/risquette/releases/latest). It needs no administrator rights and keeps itself up to date.
 
 - **Windows 10 and 11:** run **RisquetteSetup**. It installs just for you. Windows may show a SmartScreen warning the first time; choose **More info → Run anyway**.
-- **Linux (beta):** Linux support is in beta, so for now the AppImage comes with the [newest pre-release](https://risquette.xnoid.studio/releases). Download it, make it executable (`chmod +x Risquette-*.AppImage`, or tick "Allow executing as program" in its properties) and open it. It runs on most distributions and updates itself.
+- **Linux:** download the **AppImage**, make it executable (`chmod +x Risquette-*.AppImage`, or tick "Allow executing as program" in its properties) and open it. It runs on most distributions and updates itself.
 
 Every release publishes SHA-256 checksums next to the downloads, and [risquette.xnoid.studio/releases](https://risquette.xnoid.studio/releases) lists every version.
 
