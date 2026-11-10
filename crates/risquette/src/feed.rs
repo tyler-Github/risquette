@@ -1,6 +1,7 @@
 //! A paginated feed of posts (and comments, for profiles and lists) with
-//! infinite scroll. Used for the home/all feeds, community feeds, user
-//! profiles and saved lists. An optional header view scrolls with the feed.
+//! infinite scroll. Used for the home/all feeds, community feeds, custom
+//! feeds, user profiles and saved lists. An optional header view scrolls with
+//! the feed.
 
 use crate::{
     bus::{self, ContentEvent},
@@ -11,9 +12,10 @@ use crate::{
     state::api_view,
     storage, ui,
 };
-use discuit_api::{FeedItem, FeedQuery, FeedSort, FeedType, ListItem, Post};
+use discuit_api::{Client, FeedItem, FeedQuery, FeedSort, FeedType, ListItem, Post};
 use gpui::{AnyElement, AnyView, Context, FontWeight, ListAlignment, ListState, SharedString, Subscription, Task, Window, div, list, prelude::*, px};
 use risquette_theme::ActiveTheme;
+use std::collections::VecDeque;
 
 const PAGE_SIZE: u32 = 20;
 /// Start fetching the next page when this many items remain below the viewport.
@@ -22,9 +24,103 @@ const PREFETCH: usize = 5;
 #[derive(Debug, Clone, PartialEq)]
 pub enum Source {
     Site(FeedType),
-    Community { id: String, name: String },
+    Community {
+        id: String,
+        name: String,
+    },
     User(String),
     List(i64),
+    /// A custom feed (see [`crate::personal`]): several communities, newest first.
+    Custom(u64),
+}
+
+impl Source {
+    /// Where this feed's own sort is kept when "remember the sort per feed" is on.
+    fn sort_key(&self) -> Option<String> {
+        match self {
+            Source::Site(FeedType::Home) => Some("home".into()),
+            Source::Site(FeedType::Moderating) => Some("moderating".into()),
+            Source::Site(_) => Some("all".into()),
+            Source::Community { id, .. } => Some(format!("community:{id}")),
+            _ => None,
+        }
+    }
+}
+
+/// One loaded page: items, their list item ids (lists only), the next cursor,
+/// and a custom feed's paging state.
+type Page = (Vec<FeedItem>, Vec<i64>, Option<String>, Option<Merge>);
+
+/// Pages through several community feeds at once, newest first, for custom
+/// feeds. Each community has a queue of posts (sorted newest first by the
+/// server); the next post is the newest at the front of any queue. A queue that
+/// runs dry while its community has more posts stops the page, since its next
+/// post could be the newest of all, so that the order is exact across pages.
+#[derive(Debug, Clone, Default)]
+struct Merge {
+    lanes: Vec<Lane>,
+}
+
+#[derive(Debug, Clone)]
+struct Lane {
+    community_id: String,
+    queue: VecDeque<Post>,
+    next: Option<String>,
+    done: bool,
+}
+
+impl Merge {
+    fn new(community_ids: impl IntoIterator<Item = String>) -> Self {
+        Merge { lanes: community_ids.into_iter().map(|community_id| Lane { community_id, queue: VecDeque::new(), next: None, done: false }).collect() }
+    }
+
+    /// Fetch a page for every community whose queue is running low.
+    fn fill(&mut self, c: &Client) -> discuit_api::Result<()> {
+        for lane in &mut self.lanes {
+            if lane.done || lane.queue.len() >= PAGE_SIZE as usize {
+                continue;
+            }
+            let query = FeedQuery {
+                feed: FeedType::Community,
+                sort: FeedSort::Latest,
+                community_id: Some(lane.community_id.clone()),
+                limit: Some(PAGE_SIZE),
+                next: lane.next.take(),
+            };
+            match c.feed(&query) {
+                Ok(page) => {
+                    // Pinned posts would break the time order; they stay on the community's own page.
+                    lane.queue.extend(page.posts.unwrap_or_default().into_iter().filter(|p| !p.is_pinned && !p.is_pinned_site));
+                    lane.done = page.next.is_none();
+                    lane.next = page.next;
+                }
+                // A community that's gone (or private) is skipped rather than failing the feed.
+                Err(e) if !e.is_network() => {
+                    log::warn!("custom feed: community {}: {e}", lane.community_id);
+                    lane.done = true;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
+    /// Up to `n` posts, newest first.
+    fn take(&mut self, n: usize) -> Vec<Post> {
+        let mut out = Vec::new();
+        while out.len() < n {
+            if self.lanes.iter().any(|l| l.queue.is_empty() && !l.done) {
+                break;
+            }
+            let Some(lane) = self.lanes.iter_mut().filter(|l| !l.queue.is_empty()).max_by_key(|l| l.queue[0].created_at) else { break };
+            out.extend(lane.queue.pop_front());
+        }
+        out
+    }
+
+    fn exhausted(&self) -> bool {
+        self.lanes.iter().all(|l| l.done && l.queue.is_empty())
+    }
 }
 
 pub struct FeedView {
@@ -46,6 +142,8 @@ pub struct FeedView {
     generation: u64,
     /// Posts newer than anything shown, found by [`FeedView::check_for_new`].
     new_posts: usize,
+    /// Paging state of a custom feed (taken while a page loads).
+    merge: Option<Merge>,
     _load: Option<Task<()>>,
     _check: Option<Task<()>>,
     _subs: Vec<Subscription>,
@@ -60,7 +158,10 @@ impl FeedView {
                 weak.update(cx, |this, cx| this.load_more(cx)).ok();
             }
         });
-        let sort = storage::load().feed_sort.and_then(|s| FeedSort::ALL.into_iter().find(|f| f.as_query() == s)).unwrap_or_default();
+        // The feed's own sort when "remember the sort per feed" is on, else the shared one.
+        let stored = storage::load();
+        let own = source.sort_key().filter(|_| stored.sort_per_feed).and_then(|k| stored.feed_sorts.get(&k).cloned());
+        let sort = own.or(stored.feed_sort).and_then(|s| FeedSort::ALL.into_iter().find(|f| f.as_query() == s)).unwrap_or_default();
 
         let mut subs = vec![cx.subscribe(&bus::entity(cx), |this, _, ev: &ContentEvent, cx| this.on_content(ev, cx))];
         let mut last_user = Session::get(cx).user().map(|u| u.id.clone());
@@ -94,6 +195,7 @@ impl FeedView {
             aside_on_top: false,
             generation: 0,
             new_posts: 0,
+            merge: None,
             _load: None,
             _check: None,
             _subs: subs,
@@ -135,6 +237,7 @@ impl FeedView {
             Source::Community { name, .. } => name.clone().into(),
             Source::User(u) => format!("@{u}").into(),
             Source::List(_) => "List".into(),
+            Source::Custom(_) => "Custom feed".into(),
         }
     }
 
@@ -170,7 +273,13 @@ impl FeedView {
             return;
         }
         self.sort = sort;
-        storage::update(|s| s.feed_sort = Some(sort.as_query().to_string()));
+        let key = self.source.sort_key();
+        storage::update(|s| match key.filter(|_| s.sort_per_feed) {
+            Some(key) => {
+                s.feed_sorts.insert(key, sort.as_query().to_string());
+            }
+            None => s.feed_sort = Some(sort.as_query().to_string()),
+        });
         self.refresh(cx);
     }
 
@@ -178,6 +287,7 @@ impl FeedView {
         self.generation += 1;
         self.new_posts = 0;
         self._check = None;
+        self.merge = None;
         self.items.clear();
         self.list_item_ids.clear();
         self.next = None;
@@ -197,21 +307,34 @@ impl FeedView {
         let next = self.next.clone();
         let source = self.source.clone();
         let sort = self.effective_sort();
+        // A custom feed carries its paging state through the load.
+        let merge = match &self.source {
+            Source::Custom(id) => Some(self.merge.take().unwrap_or_else(|| {
+                Merge::new(crate::personal::custom_feed(*id, cx).map(|f| f.communities.into_iter().map(|c| c.id).collect::<Vec<_>>()).unwrap_or_default())
+            })),
+            _ => None,
+        };
         self._load = Some(api_view(
             cx,
-            move |c| -> discuit_api::Result<(Vec<FeedItem>, Vec<i64>, Option<String>)> {
-                match source {
+            move |c| -> discuit_api::Result<Page> {
+                if let Some(mut merge) = merge {
+                    merge.fill(c)?;
+                    let posts = merge.take(PAGE_SIZE as usize);
+                    let more = (!merge.exhausted()).then(|| "more".to_string());
+                    return Ok((posts.into_iter().map(|p| FeedItem::Post(Box::new(p))).collect(), Vec::new(), more, Some(merge)));
+                }
+                let (items, ids, next) = match source {
                     Source::Site(feed) => {
                         let page = c.feed(&FeedQuery { feed, sort, community_id: None, limit: Some(PAGE_SIZE), next })?;
-                        Ok((page.posts.unwrap_or_default().into_iter().map(|p| FeedItem::Post(Box::new(p))).collect(), Vec::new(), page.next))
+                        (page.posts.unwrap_or_default().into_iter().map(|p| FeedItem::Post(Box::new(p))).collect(), Vec::new(), page.next)
                     }
                     Source::Community { id, .. } => {
                         let page = c.feed(&FeedQuery { feed: FeedType::Community, sort, community_id: Some(id), limit: Some(PAGE_SIZE), next })?;
-                        Ok((page.posts.unwrap_or_default().into_iter().map(|p| FeedItem::Post(Box::new(p))).collect(), Vec::new(), page.next))
+                        (page.posts.unwrap_or_default().into_iter().map(|p| FeedItem::Post(Box::new(p))).collect(), Vec::new(), page.next)
                     }
                     Source::User(name) => {
                         let page = c.user_feed(&name, None, Some(PAGE_SIZE), next.as_deref())?;
-                        Ok((page.items.unwrap_or_default(), Vec::new(), page.next))
+                        (page.items.unwrap_or_default(), Vec::new(), page.next)
                     }
                     Source::List(id) => {
                         let page = c.list_items(id, Some(PAGE_SIZE), next.as_deref(), None)?;
@@ -228,9 +351,12 @@ impl FeedView {
                                 Some((item, li.id))
                             })
                             .unzip();
-                        Ok((items, ids, page.next))
+                        (items, ids, page.next)
                     }
-                }
+                    // Custom feeds load through `Merge` above.
+                    Source::Custom(_) => (Vec::new(), Vec::new(), None),
+                };
+                Ok((items, ids, next, None))
             },
             move |this, result, cx| {
                 if this.generation != generation {
@@ -239,7 +365,8 @@ impl FeedView {
                 this.loading = false;
                 let footer = this.header_rows() + this.items.len();
                 match result {
-                    Ok((new, ids, next)) => {
+                    Ok((new, ids, next, merge)) => {
+                        this.merge = merge;
                         let new = this.filter_muted(new, cx);
                         this.list.splice(footer..footer + 1, new.len() + 1);
                         this.items.extend(new);
@@ -304,18 +431,21 @@ impl FeedView {
     }
 
     fn filter_muted(&self, items: Vec<FeedItem>, cx: &Context<Self>) -> Vec<FeedItem> {
-        // Profiles and lists show everything; feeds hide muted authors/communities.
+        // Profiles and lists show everything; feeds hide muted authors/communities
+        // and posts matching the keyword filters (Settings → Reading).
         if matches!(self.source, Source::User(_) | Source::List(_)) {
             return items;
         }
         let mutes = Session::get(cx).mutes().cloned();
+        let keywords = crate::personal::keyword_filters();
         items
             .into_iter()
             .filter(|i| match i {
                 FeedItem::Post(p) => {
                     !(p.is_author_muted
                         || p.is_community_muted
-                        || mutes.as_ref().is_some_and(|m| m.is_user_muted(&p.user_id) || m.is_community_muted(&p.community_id)))
+                        || mutes.as_ref().is_some_and(|m| m.is_user_muted(&p.user_id) || m.is_community_muted(&p.community_id))
+                        || crate::personal::post_filtered(p, &keywords))
                 }
                 FeedItem::Comment(_) => true,
             })
@@ -451,6 +581,7 @@ impl FeedView {
         } else if self.exhausted {
             let msg = match (&self.source, self.items.is_empty()) {
                 (Source::Site(FeedType::Home), true) => "Your home feed is empty. Join some communities!",
+                (Source::Custom(_), true) => "No posts yet. Add communities to this feed above.",
                 (_, true) => "Nothing here yet.",
                 _ => "You've reached the end.",
             };
@@ -587,6 +718,24 @@ mod tests {
         p.created_at = chrono::Utc::now() - chrono::Duration::minutes(minutes_ago);
         p.is_pinned_site = pinned;
         p
+    }
+
+    fn lane(id: &str, posts: &[(&str, i64)], done: bool) -> Lane {
+        Lane { community_id: id.into(), queue: posts.iter().map(|(p, m)| post(p, *m, false)).collect(), next: None, done }
+    }
+
+    #[test]
+    fn custom_feeds_merge_newest_first() {
+        let mut m = Merge { lanes: vec![lane("a", &[("a1", 1), ("a2", 30)], true), lane("b", &[("b1", 5), ("b2", 10), ("b3", 60)], true)] };
+        let ids = |posts: Vec<Post>| posts.into_iter().map(|p| p.id).collect::<Vec<_>>();
+        assert_eq!(ids(m.take(3)), ["a1", "b1", "b2"]);
+        assert_eq!(ids(m.take(10)), ["a2", "b3"]);
+        assert!(m.exhausted());
+        // A community that has run dry but has more to fetch stops the page:
+        // its next post might be newer than anything left in the others.
+        let mut m = Merge { lanes: vec![lane("a", &[("a1", 1)], false), lane("b", &[("b1", 5), ("b2", 10)], true)] };
+        assert_eq!(ids(m.take(10)), ["a1"]);
+        assert!(!m.exhausted());
     }
 
     #[test]

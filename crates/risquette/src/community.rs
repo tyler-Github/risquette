@@ -148,6 +148,14 @@ fn community_menu(c: &Community, cx: &App) -> Vec<MenuItem> {
     let mut items = Vec::new();
     let web = crate::state::AppState::client(cx).web_url(&format!("/{}", c.name));
     items.push(MenuItem::new("Open in browser", move |_, cx| cx.open_url(&web)));
+    // Favourites and custom feeds (Risquette's own, kept on this computer).
+    let fav_name = c.name.clone();
+    let favourite = crate::personal::is_favourite(&c.name, cx);
+    items.push(
+        MenuItem::new(if favourite { "Remove from favourites" } else { "Add to favourites" }, move |_, cx| crate::personal::toggle_favourite(&fav_name, cx))
+            .icon(Icon::Star),
+    );
+    items.extend(crate::custom_feed::menu_items(crate::storage::FeedCommunity { id: c.id.clone(), name: c.name.clone() }, cx));
     if session.is_logged_in() {
         let muted = session.mutes().is_some_and(|m| m.is_community_muted(&c.id));
         let (id, name) = (c.id.clone(), c.name.clone());
@@ -262,6 +270,27 @@ impl Render for CommunityHeader {
                                 .on_click(move |_, _, cx| nav::go(Target::NewPost { community: Some(new_post_name.clone()) }, cx)),
                         )
                         .child(join_button("c-join", &c, cx))
+                        .child({
+                            // Favourite: a star that's filled in with the brand colour when on.
+                            let favourite = crate::personal::is_favourite(&c.name, cx);
+                            let name = c.name.clone();
+                            let t = cx.theme();
+                            let (color, hover) = (if favourite { t.colors.brand } else { t.colors.text_light }, t.colors.button);
+                            div()
+                                .id("c-fav")
+                                .size(px(34.))
+                                .flex_none()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(t.metrics.radius)
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(hover))
+                                .when(favourite, |d| d.bg(t.colors.brand.opacity(0.12)))
+                                .child(icons::sized(Icon::Star, px(18.), color))
+                                .tooltip(ui::tooltip(if favourite { "Remove from favourites" } else { "Add to favourites" }))
+                                .on_click(move |_, _, cx| crate::personal::toggle_favourite(&name, cx))
+                        })
                         .child(ui::menu_button("c-menu", move |cx| community_menu(&menu_c, cx), cx)),
                 ),
         )

@@ -29,6 +29,20 @@ const GUIDE: f32 = 22.;
 /// Deeper threads stop indenting so text never gets squeezed.
 const MAX_VISUAL_LEVEL: usize = 8;
 
+/// Hues for colour-coded thread lines: violet, blue, teal, green, amber, pink.
+const THREAD_HUES: [f32; 6] = [262., 210., 172., 130., 40., 330.];
+
+/// The thread line colour for replies at `level`, cycling through [`THREAD_HUES`].
+fn thread_color(level: usize, theme: &risquette_theme::Theme) -> gpui::Hsla {
+    let hue = THREAD_HUES[level % THREAD_HUES.len()] / 360.;
+    match (theme.mode, theme.high_contrast) {
+        (risquette_theme::Mode::Light, false) => gpui::hsla(hue, 0.6, 0.5, 0.8),
+        (risquette_theme::Mode::Dark, false) => gpui::hsla(hue, 0.6, 0.6, 0.75),
+        (risquette_theme::Mode::Light, true) => gpui::hsla(hue, 1., 0.3, 1.),
+        (risquette_theme::Mode::Dark, true) => gpui::hsla(hue, 0.9, 0.7, 1.),
+    }
+}
+
 /// An open reply or the top-level composer.
 struct Composer {
     input: Entity<TextInput>,
@@ -652,6 +666,9 @@ impl PostView {
 
         let line = t.colors.comment_line;
         let brand = t.colors.brand;
+        // Settings → Reading: a colour per depth, so long threads are easier to follow.
+        let colored = crate::storage::load().colored_thread_lines;
+        let line_at = move |level: usize| if colored { thread_color(level, &t) } else { line };
 
         // One guide per ancestor; clicking a guide collapses that ancestor's thread.
         let guides = ancestors
@@ -667,7 +684,7 @@ impl PostView {
                     .flex()
                     .justify_center()
                     .cursor_pointer()
-                    .child(div().w(px(2.)).h_full().bg(line))
+                    .child(div().w(px(2.)).h_full().bg(line_at(depth)))
                     .hover(move |s| s.bg(brand.opacity(0.10)))
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_collapse(target.clone(), cx)))
                     .into_any_element()
@@ -689,7 +706,7 @@ impl PostView {
                         .flex()
                         .justify_center()
                         .cursor_pointer()
-                        .child(div().w(px(2.)).h_full().bg(line))
+                        .child(div().w(px(2.)).h_full().bg(line_at(row.level)))
                         .hover(move |s| s.bg(brand.opacity(0.10)))
                         .on_click(cx.listener(move |this, _, _, cx| this.toggle_collapse(own_id.clone(), cx))),
                 )

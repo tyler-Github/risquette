@@ -16,6 +16,15 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 - **Saved lists:** your own lists and other people's public lists.
 - **Links:** Discuit links open inside the app, and `risquette <link>` opens one from the command line.
 
+## Making it yours
+
+These live in your settings on your computer, so they work the same whichever account you use.
+
+- **Custom feeds:** combine several communities into one feed, newest first, for example "Tech" from technology, programming and news. Make one from **New custom feed** in the sidebar, or from a community's right-click or ⋯ menu. A custom feed's page lists its communities, with a box to add more, and buttons to rename or delete it.
+- **Favourite communities:** star a community (on its page, or by right-clicking it in the sidebar) to keep it at the top of the sidebar. Drag favourites to put them in your own order, or use **Move up** and **Move down** on right-click.
+- **Keyword filters:** hide posts whose title or text contains certain words or phrases, from every feed except profiles and saved lists. Matching is by whole word in any case, so "art" hides "Modern Art" but not "start". Set them in Settings → Reading.
+- **Reading options** (Settings → Reading): put a gallery's arrows, dots and counter under the picture instead of on it, colour-code reply lines by depth, and keep a separate sort for Home, All and each community.
+
 <table>
   <tr>
     <td width="50%"><img alt="A post with its comment thread" src="../branding/framed/post.png"></td>
@@ -51,13 +60,13 @@ Everything Risquette can do today. For a quick overview, see the [README](../REA
 ## The app
 
 - **Any Discuit instance:** switch servers in Settings → Instance. Risquette checks the address before switching and keeps a separate login for each instance.
-- **Settings:** profile picture, about text, preferences, password, muted users and communities, and account deletion. App settings work while logged out too: theme (System, Light or Dark), the feed to open on launch, and how videos open.
+- **Settings:** profile picture, about text, preferences, password, muted users and communities, and account deletion. App settings work while logged out too: theme (System, Light or Dark, each with a high-contrast option), the feed to open on launch, how videos open, and the reading options above.
 - **Updates:** Risquette checks for new versions in the background, then shows a pill in the toolbar and an update dialog with release notes. Updates download with a progress bar and are checked against their SHA-256 before the app restarts into the new version. There are stable and beta channels, and you can skip a version.
 - **One window:** Risquette opens maximized, and opening it while it's already running brings the existing window to the front.
 - **Losing the connection:** if the server can't be reached for more than a moment, Risquette shows a reconnecting screen and keeps trying, counting down to each attempt (**Try now** skips the wait). **Use a different server** sets the screen aside for a slim banner and opens Settings. Once the server is back, pages that failed to load reload themselves, along with any missing images and your account. Only loading is retried: nothing you send is repeated.
 - **Crash reports:** if something goes wrong, Risquette saves a report and shows a friendly window explaining what happened. It can open a GitHub issue with the details already filled in, or restart the app. Settings → Help & troubleshooting opens the log and crash-report folders.
 - **Windows and Linux:** on Windows, a branded, per-user setup wizard that needs no administrator rights. It creates Start menu and desktop shortcuts, adds an entry in Apps & features, and installs a matching uninstaller. On Linux, a single AppImage that runs on most distributions and replaces itself when it updates.
-- **Interface:** a collapsible sidebar that shrinks to an icon rail, light and dark themes based on Discuit's own design, and [Lucide](https://lucide.dev) icons.
+- **Interface:** a collapsible sidebar that shrinks to an icon rail, light and dark themes based on Discuit's own design, high-contrast versions of both whose text meets the strictest accessibility guideline (WCAG AAA), and [Lucide](https://lucide.dev) icons.
 
 <table>
   <tr>

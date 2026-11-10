@@ -540,15 +540,10 @@ pub fn run_reporter(path: PathBuf) {
     let report = fs::read_to_string(&path).unwrap_or_else(|e| format!("The crash report at {} couldn't be read: {e}", path.display()));
     let summary = report_summary(&report);
     Application::new().with_assets(icons::Assets).run(move |cx: &mut App| {
-        let mode = match crate::storage::load().theme.as_deref() {
-            Some("dark") => Mode::Dark,
-            Some("light") => Mode::Light,
-            _ => match cx.window_appearance() {
-                WindowAppearance::Dark | WindowAppearance::VibrantDark => Mode::Dark,
-                _ => Mode::Light,
-            },
-        };
-        cx.set_global(Theme::new(mode));
+        let system_dark = matches!(cx.window_appearance(), WindowAppearance::Dark | WindowAppearance::VibrantDark);
+        let stored = crate::storage::load();
+        let mode = Mode::from_setting(stored.theme.as_deref(), system_dark);
+        cx.set_global(Theme::with_contrast(mode, stored.high_contrast));
         let bounds = Bounds::centered(None, size(px(640.), px(700.)), cx);
         cx.open_window(
             WindowOptions {

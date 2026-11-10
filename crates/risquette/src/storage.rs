@@ -18,6 +18,9 @@ pub struct Stored {
     /// `"light"` or `"dark"`; `None` follows the OS.
     #[serde(default)]
     pub theme: Option<String>,
+    /// Use the high-contrast version of the light or dark theme.
+    #[serde(default)]
+    pub high_contrast: bool,
     /// Last feed sort, as its query value.
     #[serde(default)]
     pub feed_sort: Option<String>,
@@ -49,6 +52,44 @@ pub struct Stored {
     /// A version the user chose to skip.
     #[serde(default)]
     pub skipped_version: Option<String>,
+    /// Image carousel arrows, counter and dots sit under the picture instead of on it.
+    #[serde(default)]
+    pub carousel_controls_below: bool,
+    /// Comment thread lines get a colour per depth.
+    #[serde(default)]
+    pub colored_thread_lines: bool,
+    /// Each feed keeps its own sort ([`Stored::feed_sorts`]) instead of sharing `feed_sort`.
+    #[serde(default)]
+    pub sort_per_feed: bool,
+    /// The sort of each feed, by feed key (see `feed::FeedView::sort_key`), when `sort_per_feed` is on.
+    #[serde(default)]
+    pub feed_sorts: BTreeMap<String, String>,
+    /// Posts whose title or body contains one of these (whole words, any case) are hidden from feeds.
+    #[serde(default)]
+    pub keyword_filters: Vec<String>,
+    /// Custom feeds made of several communities, per instance base URL.
+    #[serde(default)]
+    pub custom_feeds: BTreeMap<String, Vec<CustomFeed>>,
+    /// Favourite communities (names, in the order shown), per instance base URL.
+    #[serde(default)]
+    pub favourite_communities: BTreeMap<String, Vec<String>>,
+}
+
+/// A feed of posts from several communities, defined by the user.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CustomFeed {
+    /// Stable id (for navigation), unique among the instance's custom feeds.
+    pub id: u64,
+    pub name: String,
+    #[serde(default)]
+    pub communities: Vec<FeedCommunity>,
+}
+
+/// A community in a custom feed.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FeedCommunity {
+    pub id: String,
+    pub name: String,
 }
 
 /// A login kept for switching accounts.
@@ -98,11 +139,17 @@ fn file() -> Option<PathBuf> {
     Some(dir()?.join("state.json"))
 }
 
+/// The settings, read from disk once and kept in memory: views read them while
+/// drawing, so a disk read each time would be wasteful.
+static CACHE: std::sync::Mutex<Option<Stored>> = std::sync::Mutex::new(None);
+
 pub fn load() -> Stored {
-    file().and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.get_or_insert_with(|| file().and_then(|f| std::fs::read(f).ok()).and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()).clone()
 }
 
 pub fn save(state: &Stored) {
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = Some(state.clone());
     let (Some(dir), Some(file)) = (dir(), file()) else { return };
     if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| {
         let tmp = file.with_extension("json.tmp");

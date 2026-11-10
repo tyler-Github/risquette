@@ -28,7 +28,7 @@ use gpui::{
     AnimationExt, AnyView, App, Context, Entity, FocusHandle, Focusable, FontWeight, Pixels, Point, SharedString, Subscription, Task, Window, anchored,
     deferred, div, prelude::*, px,
 };
-use risquette_theme::{ActiveTheme, Mode, Theme};
+use risquette_theme::{ActiveTheme, Theme};
 use std::{rc::Rc, time::Duration};
 
 type TitleFn = Rc<dyn Fn(&App) -> SharedString>;
@@ -267,6 +267,16 @@ impl Root {
                 let view = cx.new(AdminView::new);
                 simple(target.clone(), view.into(), "Admin")
             }
+            Target::CustomFeed(id) => {
+                let id = *id;
+                let header = cx.new(|cx| crate::custom_feed::CustomFeedHeader::new(id, cx));
+                let feed = cx.new(|cx| FeedView::new(Source::Custom(id), cx).with_header(header.clone()));
+                header.update(cx, |h, _| h.set_feed(feed.downgrade()));
+                let mut route = feed_route(target.clone(), feed);
+                // The title follows renames.
+                route.title = Rc::new(move |cx| crate::personal::custom_feed(id, cx).map(|f| f.name.into()).unwrap_or_else(|| "Custom feed".into()));
+                route
+            }
         };
         self.stack.push(route);
         if self.stack.len() > 40 {
@@ -335,7 +345,7 @@ impl Root {
 
     fn toggle_theme(&mut self, _: &ToggleTheme, _window: &mut Window, cx: &mut Context<Self>) {
         let mode = cx.theme().mode.toggled();
-        storage::update(|s| s.theme = Some(if mode == Mode::Dark { "dark" } else { "light" }.into()));
+        storage::update(|s| s.theme = Some(mode.setting().into()));
         Theme::set_mode(mode, cx);
     }
 
@@ -351,7 +361,6 @@ impl Root {
                 move |_, cx| nav::go(Target::User(u.clone()), cx)
             })
             .icon(Icon::User),
-            MenuItem::new("Settings", |_, cx| nav::go(Target::Settings, cx)).icon(Icon::Settings),
             MenuItem::new("Moderating feed", |_, cx| {
                 let feed = cx.new(|cx| FeedView::new(Source::Site(FeedType::Moderating), cx));
                 if let Some(root) = cx.try_global::<RootHandle>().and_then(|h| h.0.upgrade()) {
@@ -480,8 +489,8 @@ impl Root {
                     .child(
                         ui::icon_button(
                             "nav-theme",
-                            if t.mode == Mode::Dark { Icon::Sun } else { Icon::Moon },
-                            if t.mode == Mode::Dark { "Light theme" } else { "Dark theme" },
+                            if t.mode.is_dark() { Icon::Sun } else { Icon::Moon },
+                            if t.mode.is_dark() { "Light theme" } else { "Dark theme" },
                             cx,
                         )
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_theme(&ToggleTheme, window, cx))),
@@ -742,8 +751,8 @@ impl Root {
                             .px(px(16.))
                             .py(px(10.))
                             .rounded(px(8.))
-                            .bg(if t.mode == Mode::Dark { gpui::white() } else { gpui::black() }.opacity(0.88))
-                            .text_color(if t.mode == Mode::Dark { gpui::black() } else { gpui::white() })
+                            .bg(if t.mode.is_dark() { gpui::white() } else { gpui::black() }.opacity(0.88))
+                            .text_color(if t.mode.is_dark() { gpui::black() } else { gpui::white() })
                             .text_size(t.fs.normal)
                             .shadow_lg()
                             .child(msg.clone())

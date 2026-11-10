@@ -27,7 +27,8 @@
 | --- | --- |
 | **Native and fast**<br>Written in Rust on [GPUI](https://gpui.rs), the UI framework behind the Zed editor. | **Everything Discuit does**<br>Feeds, posts, threaded comments, notifications, saved lists, mod tools and admin. |
 | **Any instance**<br>Use discuit.org or any other Discuit server, with a separate login for each. | **Media done right**<br>Image carousels, plus a pop-out player for YouTube, Vimeo and other videos on Windows. |
-| **Light and dark**<br>Themes based on Discuit's own design, following your system. | **Windows and Linux**<br>A per-user installer on Windows and an AppImage on Linux. Both update themselves, and every download is checksum-verified. |
+| **Light, dark and high contrast**<br>Themes based on Discuit's own design, following your system, plus high-contrast versions of both. | **Windows and Linux**<br>A per-user installer on Windows and an AppImage on Linux. Both update themselves, and every download is checksum-verified. |
+| **Your own feeds**<br>Combine communities into custom feeds, keep favourites at the top of the sidebar, and filter out topics by keyword. | **Read your way**<br>Colour-coded reply lines, gallery controls that don't cover the picture, and a separate sort for each feed. |
 
 <p align="center">
   <picture>
