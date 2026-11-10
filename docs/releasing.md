@@ -42,6 +42,21 @@ Only the repository owner can publish releases. The "Protect release tags" rules
 
    The app won't install an update without the checksum file. The AppImage is built on Ubuntu 22.04, so it runs on distributions at least that new.
 
+### Bug-fix releases
+
+A release that only fixes things gets a bug-fix version: the last number goes up, like `0.3.1` after `0.3.0`. It's quicker to release and the website marks it as a bug fix.
+
+1. Make sure the Unreleased notes only have **Fixed** (or **Security**) entries. `python scripts/changelog.py prepare 0.3.1` refuses a bug-fix version if they have **Added** entries: new features go in a feature release, like `0.4.0`.
+2. Commit, merge, then tag and push `v0.3.1` as usual.
+
+The release workflow treats every release the same way, except:
+
+- Before building, it waits for CI to pass on the tagged commit, and stops if a required check failed. So tag a commit that's on `main`.
+- A bug-fix release doesn't run the tests again, because CI just ran them on that exact commit. That takes the release from roughly 27 minutes to roughly 12. Feature releases and betas still run them as a last check.
+- Release binaries are always built from scratch, without a build cache.
+
+`python scripts/changelog.py kind <version>` prints which kind a version is: `feature` (ends in `.0`), `bugfix`, or `beta` (has a suffix).
+
 ### Betas
 
 A beta goes to people on the beta channel first, so you can check a release, including the update itself, before everyone gets it:
