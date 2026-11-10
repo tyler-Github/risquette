@@ -6,40 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
 ### Added
 
+- Risquette now runs on Linux. Download the AppImage, make it executable and open it: it works on most distributions and updates itself like the Windows version. Desktop notifications use your desktop's notification system, and videos open in your web browser.
 - Custom feeds: combine several communities into one feed, newest first. Make one from **New custom feed** in the sidebar or a community's menu, and add or remove communities from the feed's page.
 - Favourite communities: star a community to keep it at the top of the sidebar, and drag favourites into your own order.
 - Keyword filters in Settings → Reading: hide posts whose title or text contains certain words or phrases.
 - High contrast for both the light and dark themes, in Settings → App.
 - Reading options in Settings → Reading: put a gallery's arrows, dots and counter under the picture instead of on it, colour-code reply lines by depth, and remember the sort for each feed separately. All three are off unless you turn them on.
-
-### Added
-
 - Drafts: unsent comments, replies and posts are kept as you type and come back when you return, even after closing Risquette, with a **Discard** link if you don't want them. They're removed once sent.
 - While you're reading a feed, Risquette checks for new posts once a minute and shows a "new posts" button at the top. Click it to see them; the feed doesn't move under you otherwise.
-
-### Added
-
 - When Discuit can't be reached, Risquette shows a reconnecting screen that counts down to its next attempt, with **Try now** and a way into Settings if you need a different server. Once the connection is back it picks up where you left off: pages that failed to load, missing images and your account load without a restart. Nothing you send is repeated.
 
 ### Changed
 
+- Opening a video in your web browser now opens its normal page (on YouTube, Vimeo, Streamable or Dailymotion) instead of a bare player.
 - Connection problems now show a plain message such as "Couldn't reach the server" instead of a technical error, and an unreachable server is given up on after 10 seconds instead of a minute.
 
 ### Fixed
 
 - Starting Risquette without an internet connection no longer leaves it looking logged out with no communities until the next restart.
-
-## [0.3.0-beta.1] - 2026-11-09
-
-### Added
-
-- Risquette now runs on Linux. Download the AppImage, make it executable and open it: it works on most distributions and updates itself like the Windows version. Desktop notifications use your desktop's notification system, and videos open in your web browser.
-
-### Changed
-
-- Opening a video in your web browser now opens its normal page (on YouTube, Vimeo, Streamable or Dailymotion) instead of a bare player.
 
 ## [0.2.0] - 2026-11-08
 
@@ -86,7 +74,7 @@ The first release of Risquette, a desktop client for Discuit.
 - Light and dark themes.
 - A setup wizard that installs without administrator rights, and automatic updates.
 
-[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.3.0-beta.1...HEAD
-[0.3.0-beta.1]: https://github.com/tyler-Github/risquette/compare/v0.2.0...v0.3.0-beta.1
+[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/tyler-Github/risquette/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-Github/risquette/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-Github/risquette/releases/tag/v0.1.0
