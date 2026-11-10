@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/tyler-Github/risquette/security/advisories/new
+    about: Please report security problems privately, not in a public issue. See SECURITY.md.
   - name: Problem with Discuit itself
     url: https://github.com/discuitnet/discuit/issues
     about: Bugs and features in the Discuit server or website (things that also happen on discuit.org).

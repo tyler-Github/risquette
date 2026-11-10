@@ -65,7 +65,7 @@ You'll need a stable Rust toolchain, plus the MSVC build tools and Windows SDK o
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or [open an issue](https://github.com/tyler-Github/risquette/issues/new/choose). If Risquette crashes, the crash window can file the report for you.
+Bug reports, ideas and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), or [open an issue](https://github.com/tyler-Github/risquette/issues/new/choose). If Risquette crashes, the crash window can file the report for you. Security problems go privately through [SECURITY.md](SECURITY.md).
 
 ## Acknowledgements
 

@@ -1,10 +1,15 @@
-# Contributing to Risquette
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="branding/headers/contributing-dark.png">
+  <img alt="Risquette: Contributing" src="branding/headers/contributing-light.png">
+</picture>
 
 Thanks for helping out! Bug reports, ideas and pull requests are all welcome.
 
 ## Reporting bugs and ideas
 
 Use the [issue forms](https://github.com/tyler-Github/risquette/issues/new/choose). If something also goes wrong on the Discuit website, it's a Discuit issue: report it [to Discuit](https://github.com/discuitnet/discuit/issues) instead.
+
+Found a security problem? Please don't open an issue: report it privately as described in [SECURITY.md](SECURITY.md).
 
 ## Making a change
 

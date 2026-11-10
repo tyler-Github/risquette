@@ -142,6 +142,8 @@ DOC_HEADERS = {
     "features": ("Features", "Everything Risquette can do"),
     "development": ("Development", "Build, run and test Risquette"),
     "releasing": ("Releasing", "Installers, updates and the update server"),
+    "contributing": ("Contributing", "Bug reports, ideas and pull requests"),
+    "security": ("Security", "Reporting vulnerabilities privately"),
 }
 
 
