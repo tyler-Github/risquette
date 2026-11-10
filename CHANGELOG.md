@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- Clicking the "new posts" button at the top of a feed now loads the new posts, instead of opening the post underneath it.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

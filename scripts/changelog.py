@@ -6,6 +6,14 @@
     python scripts/changelog.py prepare 0.2.0      # turn "Unreleased" into 0.2.0 and bump the version
     python scripts/changelog.py prepare 0.2.0-beta.1   # ...or into a beta; a later `prepare 0.2.0`
                                                        # folds the betas' notes into the stable release
+    python scripts/changelog.py prepare 0.2.1      # a bug-fix release: only fixes, no Added notes
+    python scripts/changelog.py kind 0.2.1         # print the kind of release: feature, bugfix or beta
+
+Kinds of release: a version with a suffix (0.3.0-beta.1) is a beta; a stable
+version ending in .0 (0.3.0) is a feature release; any other stable version
+(0.3.1) is a bug-fix release. Bug-fix releases may only fix things, so
+`prepare` refuses one whose notes have "Added" entries, and the release
+workflow skips re-running the tests for them (CI already passed on the commit).
 
 `prepare` edits CHANGELOG.md, Cargo.toml and Cargo.lock but doesn't commit or
 tag anything; it prints the next steps instead.
@@ -164,6 +172,16 @@ def is_prerelease(version: str) -> bool:
     return "-" in version
 
 
+def kind(version: str) -> str:
+    """`beta`, `bugfix` (a stable x.y.z with z > 0) or `feature` (a stable x.y.0)."""
+    version = version.lstrip("v")
+    if not re.fullmatch(VERSION_RE, version):
+        raise ChangelogError(f"{version!r} isn't a version like 1.2.3 or 1.2.3-beta.1.")
+    if is_prerelease(version):
+        return "beta"
+    return "bugfix" if int(version.split(".")[2]) > 0 else "feature"
+
+
 def merge_notes(bodies: list[str]) -> str:
     """Combine several sections' notes into one, oldest first: free text, then each
     heading (Added, Changed, …) with its bullets in order, duplicates dropped."""
@@ -230,6 +248,12 @@ def prepare(log: Changelog, version: str, date: str) -> Changelog:
     body = merge_notes([b.body for b in betas] + [unreleased.body])
     if not body.strip():
         raise ChangelogError("There's nothing under Unreleased to release. Add the changes there first.")
+    if kind(version) == "bugfix" and re.search(r"^### Added\s*$", body, re.M):
+        major, minor, _ = version.split(".")
+        raise ChangelogError(
+            f"{version} is a bug-fix release, but the notes have Added entries. New features go in a "
+            f"feature release ({major}.{int(minor) + 1}.0); a bug-fix release only fixes things."
+        )
 
     beta_names = {b.name for b in betas}
     log.sections = [s for s in log.sections if s.name not in beta_names]
@@ -266,7 +290,7 @@ def write(path: str, text: str) -> None:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) < 2 or argv[1] not in {"check", "notes", "prepare"}:
+    if len(argv) < 2 or argv[1] not in {"check", "notes", "prepare", "kind"}:
         print(__doc__.strip())
         return 2
     command = argv[1]
@@ -286,6 +310,10 @@ def main(argv: list[str]) -> int:
             return 2
         version = argv[2].lstrip("v")
 
+        if command == "kind":
+            print(kind(version))
+            return 0
+
         if command == "notes":
             text = notes(log, version)
             if "--out" in argv:
@@ -300,7 +328,8 @@ def main(argv: list[str]) -> int:
         write(CARGO_TOML, set_workspace_version(read(CARGO_TOML), version))
         # Refresh Cargo.lock so `--locked` builds see the new version.
         subprocess.run(["cargo", "update", "--workspace", "--quiet"], cwd=ROOT, check=True)
-        print(f"Prepared {version}: CHANGELOG.md, Cargo.toml and Cargo.lock are updated.\n")
+        label = {"bugfix": "bug-fix release", "feature": "feature release", "beta": "beta"}[kind(version)]
+        print(f"Prepared {version} ({label}): CHANGELOG.md, Cargo.toml and Cargo.lock are updated.\n")
         print("Next steps:")
         print("  1. Review the changes (git diff) and edit the notes if you like.")
         print(f'  2. Commit them, e.g. "Release v{version}", and merge to main.')

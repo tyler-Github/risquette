@@ -15,6 +15,12 @@
 # (`python scripts/changelog.py prepare <version>` creates it). The app shows
 # them in its update dialog, so the job stops early if they're missing.
 #
+# Every release first waits for CI to have passed on the tagged commit. A
+# bug-fix release (a stable x.y.z with z > 0, e.g. v0.3.1) then skips running
+# the tests again, since CI just ran them on that exact commit, which roughly
+# halves the time. Feature releases and betas run them again as a last check.
+# Release binaries are always built from scratch (no build cache).
+#
 # Settings (optional):
 #   Variable RISQUETTE_UPDATE_URL  a different update server to bake into the app
 #                                  (default: the official https://risquette.xnoid.studio)
@@ -39,6 +45,11 @@ jobs:
     name: Check version and notes
     if: github.actor == github.repository_owner
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read # see CI's results for the tagged commit
+    outputs:
+      kind: ${{ steps.kind.outputs.kind }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -55,6 +66,43 @@ jobs:
           python3 scripts/changelog.py check
           python3 scripts/changelog.py notes "${GITHUB_REF_NAME}" --out release-notes.md
           cat release-notes.md
+      - name: Kind of release
+        id: kind
+        run: |
+          kind="$(python3 scripts/changelog.py kind "${GITHUB_REF_NAME}")"
+          echo "kind=${kind}" >> "$GITHUB_OUTPUT"
+          echo "This is a ${kind} release."
+      - name: CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The checks "Protect main" requires. CI may still be running if the tag
+        # was pushed right after merging, so wait for it (up to 45 minutes).
+        run: |
+          required=("Formatting" "Clippy" "Tests" "Docs and links" "Dependency audit" "Linux" "Linux AppImage")
+          for attempt in $(seq 1 90); do
+            runs="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs" \
+              -q '.check_runs[] | [.name, .status, (.conclusion // "")] | @tsv')"
+            pending=0
+            for name in "${required[@]}"; do
+              line="$(printf '%s\n' "$runs" | awk -F'\t' -v n="$name" '$1 == n' | head -n 1)"
+              status="$(printf '%s' "$line" | cut -f2)"
+              conclusion="$(printf '%s' "$line" | cut -f3)"
+              if [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
+                echo "::error::CI check \"${name}\" ${conclusion} on ${GITHUB_SHA}. Fix it on main and tag the fixed commit."
+                exit 1
+              elif [ "$status" != "completed" ]; then
+                pending=1
+              fi
+            done
+            if [ "$pending" = 0 ]; then
+              echo "Every required CI check passed on ${GITHUB_SHA}."
+              exit 0
+            fi
+            echo "Waiting for CI on ${GITHUB_SHA}…"
+            sleep 30
+          done
+          echo "::error::CI didn't finish on ${GITHUB_SHA} within 45 minutes (or never ran: tag a commit on main)."
+          exit 1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-notes
@@ -79,7 +127,9 @@ jobs:
 
       # No build cache here on purpose: release binaries are always built from scratch.
 
+      # CI already passed on this commit; bug-fix releases don't run the tests again.
       - name: Test
+        if: needs.check.outputs.kind != 'bugfix'
         run: cargo test --workspace --locked
 
       - name: Prepare signing certificate
@@ -123,6 +173,7 @@ jobs:
           toolchain: stable
 
       - name: Test
+        if: needs.check.outputs.kind != 'bugfix'
         run: cargo test --workspace --exclude risquette-installer --locked
 
       - name: Package

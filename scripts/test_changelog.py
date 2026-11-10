@@ -67,6 +67,27 @@ class ChangelogTests(unittest.TestCase):
         with self.assertRaises(cl.ChangelogError):
             cl.prepare(empty, "0.4.0", "2026-12-25")
 
+    def test_kinds_of_release(self):
+        self.assertEqual(cl.kind("0.3.0"), "feature")
+        self.assertEqual(cl.kind("v0.3.1"), "bugfix")
+        self.assertEqual(cl.kind("1.0.12"), "bugfix")
+        self.assertEqual(cl.kind("0.3.0-beta.1"), "beta")
+        self.assertEqual(cl.kind("0.3.1-beta.1"), "beta")
+        with self.assertRaises(cl.ChangelogError):
+            cl.kind("banana")
+
+    def test_bugfix_releases_only_fix_things(self):
+        # SAMPLE's Unreleased only has Fixed: fine as 0.2.1.
+        log = cl.prepare(cl.parse(SAMPLE), "0.2.1", "2026-12-24")
+        self.assertIn("- A thing.", log.section("0.2.1").body)
+        # New features can't go out as a bug fix.
+        with_feature = SAMPLE.replace("### Fixed\n\n- A thing.", "### Added\n\n- A feature.\n\n### Fixed\n\n- A thing.")
+        with self.assertRaises(cl.ChangelogError) as e:
+            cl.prepare(cl.parse(with_feature), "0.2.1", "2026-12-24")
+        self.assertIn("0.3.0", str(e.exception))
+        # ...but they can as a feature release.
+        cl.prepare(cl.parse(with_feature), "0.3.0", "2026-12-24")
+
     def test_prereleases_order_before_their_release(self):
         self.assertLess(cl.version_key("0.3.0-beta.1"), cl.version_key("0.3.0"))
         self.assertLess(cl.version_key("0.3.0-beta.1"), cl.version_key("0.3.0-beta.2"))

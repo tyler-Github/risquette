@@ -619,6 +619,8 @@ impl Render for FeedView {
                 div().absolute().top(px(14.)).left_0().right_0().flex().justify_center().child(
                     div()
                         .id("feed-new-posts")
+                        // Keep clicks from reaching the post underneath.
+                        .occlude()
                         .flex()
                         .items_center()
                         .gap(px(6.))
@@ -634,7 +636,10 @@ impl Render for FeedView {
                         .cursor_pointer()
                         .child(icons::icon(Icon::ChevronUp, t.colors.button_main_text))
                         .child(label)
-                        .on_click(cx.listener(|this, _, _, cx| this.show_new_posts(cx))),
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.show_new_posts(cx);
+                        })),
                 ),
             )
         });
