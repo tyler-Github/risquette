@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-10
+
 ### Fixed
 
 - Clicking the "new posts" button at the top of a feed now loads the new posts, instead of opening the post underneath it.
@@ -78,7 +80,8 @@ The first release of Risquette, a desktop client for Discuit.
 - Light and dark themes.
 - A setup wizard that installs without administrator rights, and automatic updates.
 
-[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/tyler-Github/risquette/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/tyler-Github/risquette/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/tyler-Github/risquette/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/tyler-Github/risquette/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/tyler-Github/risquette/releases/tag/v0.1.0
