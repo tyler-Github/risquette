@@ -29,6 +29,80 @@ pub fn build_tree(comments: Vec<Comment>) -> Vec<CommentNode> {
     roots.into_iter().map(|c| attach(c, &mut children)).collect()
 }
 
+/// How replies at each level of a thread are ordered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CommentSort {
+    /// Most upvotes first (the server's own order).
+    #[default]
+    Best,
+    /// The longest thread first: the most comments counting all replies,
+    /// then the deepest, then the most upvotes.
+    Top,
+    /// Newest first.
+    New,
+    /// Oldest first, as the conversation happened.
+    Old,
+}
+
+impl CommentSort {
+    pub const ALL: [CommentSort; 4] = [CommentSort::Best, CommentSort::Top, CommentSort::New, CommentSort::Old];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            CommentSort::Best => "Best",
+            CommentSort::Top => "Top",
+            CommentSort::New => "New",
+            CommentSort::Old => "Old",
+        }
+    }
+
+    /// The value saved in settings.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CommentSort::Best => "best",
+            CommentSort::Top => "top",
+            CommentSort::New => "new",
+            CommentSort::Old => "old",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|c| c.as_str() == s)
+    }
+}
+
+/// Order each level of a forest by `sort`: top-level comments among
+/// themselves, and each comment's replies among themselves, so replies always
+/// stay under their parent. Ties are broken by id so the order is stable.
+pub fn sort_tree(nodes: &mut [CommentNode], sort: CommentSort) {
+    // Thread sizes are worked out once per level rather than inside the comparison.
+    let mut keyed: Vec<((usize, usize), CommentNode)> = nodes.iter().map(|n| (thread_size(n), n.clone())).collect();
+    keyed.sort_by(|(size_a, a), (size_b, b)| {
+        let (a, b) = (&a.comment, &b.comment);
+        let best = || b.upvotes.cmp(&a.upvotes).then((b.upvotes - b.downvotes).cmp(&(a.upvotes - a.downvotes))).then(b.created_at.cmp(&a.created_at));
+        let order = match sort {
+            CommentSort::Best => best(),
+            // (comments, depth): bigger first, then deeper, then the best.
+            CommentSort::Top => size_b.cmp(size_a).then_with(best),
+            CommentSort::New => b.created_at.cmp(&a.created_at),
+            CommentSort::Old => a.created_at.cmp(&b.created_at),
+        };
+        order.then_with(|| a.id.cmp(&b.id))
+    });
+    for (slot, (_, node)) in nodes.iter_mut().zip(keyed) {
+        *slot = node;
+    }
+    for n in nodes {
+        sort_tree(&mut n.children, sort);
+    }
+}
+
+/// A thread's length: how many comments it holds (this one and every reply
+/// under it), and how deep its longest chain of replies goes.
+fn thread_size(n: &CommentNode) -> (usize, usize) {
+    n.children.iter().map(thread_size).fold((1, 1), |(count, depth), (c, d)| (count + c, depth.max(d + 1)))
+}
+
 /// One visible row of a comment thread.
 #[derive(Debug, Clone)]
 pub struct CommentRow {
@@ -65,6 +139,60 @@ mod tests {
 
     fn c(id: &str, parent: Option<&str>, direct: i64) -> Comment {
         Comment { id: id.into(), parent_id: parent.map(Into::into), no_replies_direct: direct, created_at: Default::default(), ..Default::default() }
+    }
+
+    fn scored(id: &str, parent: Option<&str>, up: i64, down: i64, minute: u32) -> Comment {
+        let created_at = chrono::DateTime::parse_from_rfc3339(&format!("2026-01-01T00:{minute:02}:00Z")).unwrap().into();
+        Comment { id: id.into(), parent_id: parent.map(Into::into), upvotes: up, downvotes: down, created_at, ..Default::default() }
+    }
+
+    #[test]
+    fn every_level_is_sorted_and_replies_stay_under_their_parent() {
+        // a: score 5, posted minute 1; b: score 9, minute 3; c: score 2, minute 2.
+        // a's replies: a1 (score 1, minute 4) and a2 (score 3, minute 5).
+        let list = vec![
+            scored("a", None, 6, 1, 1),
+            scored("b", None, 9, 0, 3),
+            scored("c", None, 2, 0, 2),
+            scored("a1", Some("a"), 1, 0, 4),
+            scored("a2", Some("a"), 3, 0, 5),
+        ];
+        let order = |sort| {
+            let mut tree = build_tree(list.clone());
+            sort_tree(&mut tree, sort);
+            flatten(&tree, &HashSet::new()).into_iter().map(|r| r.comment.id).collect::<Vec<_>>()
+        };
+        assert_eq!(order(CommentSort::Best), ["b", "a", "a2", "a1", "c"]);
+        // a holds the only thread (3 comments), so it leads despite fewer upvotes than b.
+        assert_eq!(order(CommentSort::Top), ["a", "a2", "a1", "b", "c"]);
+        assert_eq!(order(CommentSort::New), ["b", "c", "a", "a2", "a1"]);
+        assert_eq!(order(CommentSort::Old), ["a", "a1", "a2", "c", "b"]);
+        assert_eq!(CommentSort::parse("old"), Some(CommentSort::Old));
+        assert_eq!(CommentSort::parse("nope"), None);
+    }
+
+    #[test]
+    fn top_puts_the_longest_thread_first() {
+        // x: one comment with two direct replies (3 comments, depth 2).
+        // y: a chain of three (3 comments, depth 3): same size, deeper, so it wins.
+        // z: four comments in a chain: biggest of all.
+        let list = vec![
+            scored("x", None, 50, 0, 1),
+            scored("x1", Some("x"), 1, 0, 2),
+            scored("x2", Some("x"), 1, 0, 3),
+            scored("y", None, 1, 0, 4),
+            scored("y1", Some("y"), 1, 0, 5),
+            scored("y2", Some("y1"), 1, 0, 6),
+            scored("z", None, 0, 0, 7),
+            scored("z1", Some("z"), 0, 0, 8),
+            scored("z2", Some("z1"), 0, 0, 9),
+            scored("z3", Some("z2"), 0, 0, 10),
+            scored("lonely", None, 99, 0, 11),
+        ];
+        let mut tree = build_tree(list);
+        sort_tree(&mut tree, CommentSort::Top);
+        let roots: Vec<_> = tree.iter().map(|n| n.comment.id.as_str()).collect();
+        assert_eq!(roots, ["z", "y", "x", "lonely"]);
     }
 
     #[test]
