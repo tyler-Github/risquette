@@ -15,7 +15,7 @@ use crate::{
 };
 use discuit_api::{
     Comment, Post, PostType, UserGroup,
-    tree::{self, CommentRow},
+    tree::{self, CommentRow, CommentSort},
 };
 use gpui::{
     AnyElement, ClipboardItem, Context, Entity, FontWeight, ListAlignment, ListState, ObjectFit, SharedString, Subscription, Task, Window, div, list,
@@ -31,6 +31,15 @@ const MAX_VISUAL_LEVEL: usize = 8;
 
 /// Hues for colour-coded thread lines: violet, blue, teal, green, amber, pink.
 const THREAD_HUES: [f32; 6] = [262., 210., 172., 130., 40., 330.];
+
+fn comment_sort_icon(sort: CommentSort) -> Icon {
+    match sort {
+        CommentSort::Best => Icon::ArrowBigUp,
+        CommentSort::Top => Icon::MessageSquare,
+        CommentSort::New => Icon::Sparkles,
+        CommentSort::Old => Icon::Clock,
+    }
+}
 
 /// The thread line colour for replies at `level`, cycling through [`THREAD_HUES`].
 fn thread_color(level: usize, theme: &risquette_theme::Theme) -> gpui::Hsla {
@@ -72,6 +81,8 @@ pub struct PostView {
     composer: Composer,
     /// The comment id being replied to, and its composer.
     reply: Option<(String, Composer)>,
+    /// How each level of the thread is ordered (remembered across posts).
+    comment_sort: CommentSort,
     aside: Option<Entity<CommunityAside>>,
     _tasks: Vec<Task<()>>,
     _subs: Vec<Subscription>,
@@ -103,6 +114,7 @@ impl PostView {
             list: ListState::new(1, ListAlignment::Top, px(1500.)),
             composer,
             reply: None,
+            comment_sort: crate::storage::load().comment_sort.as_deref().and_then(CommentSort::parse).unwrap_or_default(),
             aside: None,
             _tasks: Vec::new(),
             _subs: subs,
@@ -246,7 +258,8 @@ impl PostView {
     }
 
     fn rebuild_rows(&mut self) {
-        let forest = tree::build_tree(self.comments.clone());
+        let mut forest = tree::build_tree(self.comments.clone());
+        tree::sort_tree(&mut forest, self.comment_sort);
         self.rows = tree::flatten(&forest, &self.collapsed);
         // Rows are depth-first, so a stack of ids by level gives each row's ancestors.
         let mut stack: Vec<String> = Vec::new();
@@ -264,6 +277,17 @@ impl PostView {
         let top = self.list.logical_scroll_top();
         self.list.reset(self.rows.len() + 3);
         self.list.scroll_to(top);
+    }
+
+    /// Reorder the thread (and remember the choice for other posts).
+    fn set_comment_sort(&mut self, sort: CommentSort, cx: &mut Context<Self>) {
+        if sort == self.comment_sort {
+            return;
+        }
+        self.comment_sort = sort;
+        crate::storage::update(|s| s.comment_sort = Some(sort.as_str().to_string()));
+        self.rebuild_rows();
+        cx.notify();
     }
 
     fn open_reply(&mut self, comment_id: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -644,9 +668,42 @@ impl PostView {
                     .child(div().flex().gap(px(8.)).child(ui::button_main("c-login", "Log in", cx).on_click(|_, _, cx| crate::modals::open_login(cx)))),
             );
         }
-        section
-            .child(div().pt(px(4.)).text_size(t.fs.l).font_weight(FontWeight::SEMIBOLD).text_color(t.colors.text).child(ui::plural(n, "comment")))
-            .into_any_element()
+        let current = self.comment_sort;
+        let weak = cx.entity().downgrade();
+        let heading = div()
+            .pt(px(4.))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(10.))
+            .child(div().text_size(t.fs.l).font_weight(FontWeight::SEMIBOLD).text_color(t.colors.text).child(ui::plural(n, "comment")))
+            // Only worth sorting with more than one comment.
+            .when(n > 1, |d| {
+                d.child(
+                    ui::button_clear("comment-sort", cx)
+                        .border_1()
+                        .border_color(t.colors.separator)
+                        .child(icons::sized(comment_sort_icon(current), px(15.), t.colors.text_light))
+                        .child(div().text_color(t.colors.text_light).child("Sort:"))
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(current.label()))
+                        .child(icons::sized(Icon::ChevronDown, px(14.), t.colors.text_light))
+                        .on_click(move |ev, window, cx| {
+                            let pos = if ev.position() == gpui::Point::default() { window.mouse_position() } else { ev.position() };
+                            let items = CommentSort::ALL
+                                .into_iter()
+                                .map(|sort| {
+                                    let weak = weak.clone();
+                                    crate::nav::MenuItem::new(sort.label(), move |_, cx| {
+                                        weak.update(cx, |this, cx| this.set_comment_sort(sort, cx)).ok();
+                                    })
+                                    .icon(if sort == current { Icon::Check } else { comment_sort_icon(sort) })
+                                })
+                                .collect();
+                            crate::nav::open_menu(pos, items, cx);
+                        }),
+                )
+            });
+        section.child(heading).into_any_element()
     }
 
     fn render_comment(&mut self, row_ix: usize, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {

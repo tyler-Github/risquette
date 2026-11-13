@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Sort a post's comments by Best (most upvotes), Top (the longest thread first), New or Old, from the menu next to the comment count. Replies stay under the comment they answer, sorted the same way, and Risquette remembers your choice.
+
 ## [0.3.1] - 2026-11-10
 
 ### Fixed

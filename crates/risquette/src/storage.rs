@@ -24,6 +24,9 @@ pub struct Stored {
     /// Last feed sort, as its query value.
     #[serde(default)]
     pub feed_sort: Option<String>,
+    /// How comments are ordered on a post: `"best"`, `"top"`, `"new"` or `"old"` (default best).
+    #[serde(default)]
+    pub comment_sort: Option<String>,
     /// Sidebar shown as an icon rail.
     #[serde(default)]
     pub sidebar_collapsed: bool,
