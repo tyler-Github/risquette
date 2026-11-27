@@ -1,4 +1,9 @@
-# Contributor Covenant Code of Conduct
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="branding/headers/code-of-conduct-dark.png">
+  <img alt="Risquette: Code of Conduct" src="branding/headers/code-of-conduct-light.png">
+</picture>
+
+Risquette follows the Contributor Covenant Code of Conduct.
 
 ## Our Pledge
 
