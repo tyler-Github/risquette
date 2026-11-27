@@ -20,7 +20,7 @@ pulldown-cmark = { version = "0.13", default-features = false }
 serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
-sha2 = "0.10"
+sha2 = "0.11"
 discuit-api.workspace = true
 risquette-theme.workspace = true
 

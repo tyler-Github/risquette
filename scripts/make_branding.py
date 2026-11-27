@@ -144,6 +144,7 @@ DOC_HEADERS = {
     "releasing": ("Releasing", "Installers, updates and the update server"),
     "contributing": ("Contributing", "Bug reports, ideas and pull requests"),
     "security": ("Security", "Reporting vulnerabilities privately"),
+    "code-of-conduct": ("Code of Conduct", "Keeping the community welcoming"),
 }
 
 

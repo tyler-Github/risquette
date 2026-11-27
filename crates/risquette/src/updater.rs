@@ -625,6 +625,16 @@ mod tests {
     use super::*;
 
     #[test]
+    fn checksums_match_sha256() {
+        // Fed in pieces, as downloads are, so a chunking mistake would show.
+        let mut hasher = Sha256::new();
+        hasher.update(b"a");
+        hasher.update(b"bc");
+        // The SHA-256 of "abc", from the standard's test vectors.
+        assert_eq!(hex(&hasher.finalize()), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    }
+
+    #[test]
     fn sizes_and_hex() {
         assert_eq!(human_size(41_000_000), "41.0 MB");
         assert_eq!(human_size(500), "1 KB");

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Updated libraries with known security problems: `url` (a crash on specially crafted links) and `cookie`, along with routine updates to other libraries.
+
 ### Added
 
 - Sort a post's comments by Best (most upvotes), Top (the longest thread first), New or Old, from the menu next to the comment count. Replies stay under the comment they answer, sorted the same way, and Risquette remembers your choice.

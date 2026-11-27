@@ -21,6 +21,9 @@ updates:
       # Cargo.lock until GPUI moves to a newer xattr.
       - dependency-name: libc
         versions: [">= 0.2.190"]
+      # mio 1.2.5 needs libc 0.2.190 or newer, so it's held back with libc.
+      - dependency-name: mio
+        versions: [">= 1.2.5"]
 
   - package-ecosystem: github-actions
     directory: /
